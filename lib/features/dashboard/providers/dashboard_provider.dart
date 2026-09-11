@@ -1,77 +1,104 @@
-// lib/features/dashboard/providers/dashboard_provider.dart
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
-// ✅ Import de votre service
-import 'package:thix_admin/supabase/supabase_config.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../supabase/supabase_config.dart';
 import '../models/dashboard_stats.dart';
 
+/// 🔐 État global du dashboard
 @immutable
 class DashboardState {
   final bool isLoading;
+  final bool isRefreshing;
   final DashboardStats? stats;
   final String? error;
   final DateTime? lastRefresh;
+  final int retryCount;
 
   const DashboardState({
     this.isLoading = false,
+    this.isRefreshing = false,
     this.stats,
     this.error,
     this.lastRefresh,
+    this.retryCount = 0,
   });
 
   DashboardState copyWith({
     bool? isLoading,
+    bool? isRefreshing,
     DashboardStats? stats,
     String? error,
+    bool clearError = false,
     DateTime? lastRefresh,
+    int? retryCount,
   }) {
     return DashboardState(
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       stats: stats ?? this.stats,
-      error: error,
+      error: clearError ? null : (error ?? this.error),
       lastRefresh: lastRefresh ?? this.lastRefresh,
+      retryCount: retryCount ?? this.retryCount,
     );
   }
+
+  /// Indique si c'est le premier chargement (pas encore de données)
+  bool get isFirstLoad => isLoading && stats == null;
+
+  /// Indique un rafraîchissement (données déjà présentes)
+  bool get isPullToRefresh => isRefreshing && stats != null;
 }
 
+/// 🎛️ Notifier du dashboard
 class DashboardNotifier extends StateNotifier<DashboardState> {
   DashboardNotifier() : super(const DashboardState()) {
-    refresh();
+    // Chargement initial différé de 100ms pour laisser le temps à Supabase
+    Future.delayed(const Duration(milliseconds: 100), refresh);
   }
 
+  /// 🔁 Rafraîchir toutes les données
   Future<void> refresh() async {
-    if (state.isLoading) return;
+    if (state.isLoading || state.isRefreshing) return;
 
-    state = state.copyWith(isLoading: true, error: null);
+    final isRefresh = state.stats != null;
+    state = state.copyWith(
+      isLoading: !isRefresh,
+      isRefreshing: isRefresh,
+      clearError: true,
+    );
 
     try {
-      final stats = await _fetchStats();
+      final stats = await _fetchAllStats();
       state = state.copyWith(
         isLoading: false,
+        isRefreshing: false,
         stats: stats,
         lastRefresh: DateTime.now(),
+        retryCount: 0,
       );
+      _logInfo('✅ Dashboard rafraîchi');
     } catch (e, stack) {
-      debugPrint('[DashboardProvider] Erreur: $e');
-      debugPrintStack(stackTrace: stack);
-      
+      _logError('refresh', e, stack);
       state = state.copyWith(
         isLoading: false,
+        isRefreshing: false,
         error: _formatError(e),
         stats: state.stats ?? DashboardStats.empty(),
+        retryCount: state.retryCount + 1,
       );
     }
   }
 
-  Future<DashboardStats> _fetchStats() async {
+  /// 📊 Collecte parallèle de toutes les stats
+  Future<DashboardStats> _fetchAllStats() async {
     final results = await Future.wait([
-      _countUsers(),
-      _countArticles(),
-      _countPosts(),
-      _countPendingReports(),
-      _countNewUsersToday(),
-      _countNewArticlesThisWeek(),
-      _countNewPostsThisWeek(),
+      _safeCount('users', filters: null),
+      _safeCount('news_articles', filters: {'status': 'published'}),
+      _safeCount('network_posts', filters: {'status': 'public'}),
+      _safeCount('reports', filters: {'status': 'pending'}),
+      _countSince('users', _startOfDay()),
+      _countSince('news_articles', _weekAgo(), extraFilters: {'status': 'published'}),
+      _countSince('network_posts', _weekAgo(), extraFilters: {'status': 'public'}),
       _fetchWeeklyActivity(),
       _fetchAlerts(),
     ]);
@@ -90,229 +117,213 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     );
   }
 
-  // ✅ Utilisation de SupabaseService
-  Future<int> _countUsers() async {
+  /// 🛡️ Comptage sécurisé (retourne 0 en cas d'erreur)
+  Future<int> _safeCount(
+    String table, {
+    Map<String, dynamic>? filters,
+  }) async {
     try {
-      final users = await SupabaseService.select('users', select: 'id');
-      return users.length;
-    } catch (e) {
-      debugPrint('[Dashboard] Erreur count users: $e');
-      return 0;
-    }
-  }
-
-  Future<int> _countArticles() async {
-    try {
-      final articles = await SupabaseService.select(
-        'news_articles',
+      final data = await SupabaseService.select(
+        table,
         select: 'id',
-        filters: {'status': 'published'},
+        filters: filters,
       );
-      return articles.length;
+      return data.length;
     } catch (e) {
-      debugPrint('[Dashboard] Erreur count articles: $e');
+      _logError('_safeCount($table)', e, null);
       return 0;
     }
   }
 
-  Future<int> _countPosts() async {
+  /// 📅 Comptage depuis une date donnée
+  Future<int> _countSince(
+    String table,
+    DateTime since, {
+    Map<String, dynamic>? extraFilters,
+  }) async {
     try {
-      final posts = await SupabaseService.select(
-        'network_posts',
-        select: 'id',
-        filters: {'status': 'public'},
-      );
-      return posts.length;
-    } catch (e) {
-      debugPrint('[Dashboard] Erreur count posts: $e');
-      return 0;
-    }
-  }
-
-  Future<int> _countPendingReports() async {
-    try {
-      final reports = await SupabaseService.select(
-        'reports',
-        select: 'id',
-        filters: {'status': 'pending'},
-      );
-      return reports.length;
-    } catch (e) {
-      debugPrint('[Dashboard] Erreur count reports: $e');
-      return 0;
-    }
-  }
-
-  Future<int> _countNewUsersToday() async {
-    try {
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      
-      // Utilisation directe du client pour les requêtes complexes
-      final response = await SupabaseConfig.client
-          .from('users')
+      var query = SupabaseConfig.client
+          .from(table)
           .select('id')
-          .gte('created_at', startOfDay.toIso8601String());
-      
+          .gte('created_at', since.toIso8601String());
+
+      if (extraFilters != null) {
+        for (final entry in extraFilters.entries) {
+          query = query.eq(entry.key, entry.value);
+        }
+      }
+
+      final response = await query;
       return (response as List).length;
     } catch (e) {
-      debugPrint('[Dashboard] Erreur count new users: $e');
+      _logError('_countSince($table)', e, null);
       return 0;
     }
   }
 
-  Future<int> _countNewArticlesThisWeek() async {
-    try {
-      final now = DateTime.now();
-      final weekAgo = now.subtract(const Duration(days: 7));
-      
-      final response = await SupabaseConfig.client
-          .from('news_articles')
-          .select('id')
-          .gte('created_at', weekAgo.toIso8601String())
-          .eq('status', 'published');
-      
-      return (response as List).length;
-    } catch (e) {
-      debugPrint('[Dashboard] Erreur count new articles: $e');
-      return 0;
-    }
-  }
-
-  Future<int> _countNewPostsThisWeek() async {
-    try {
-      final now = DateTime.now();
-      final weekAgo = now.subtract(const Duration(days: 7));
-      
-      final response = await SupabaseConfig.client
-          .from('network_posts')
-          .select('id')
-          .gte('created_at', weekAgo.toIso8601String())
-          .eq('status', 'public');
-      
-      return (response as List).length;
-    } catch (e) {
-      debugPrint('[Dashboard] Erreur count new posts: $e');
-      return 0;
-    }
-  }
-
+  /// 📈 Activité des 7 derniers jours
   Future<List<DailyActivity>> _fetchWeeklyActivity() async {
     try {
       final now = DateTime.now();
       final activities = <DailyActivity>[];
 
-      for (int i = 6; i >= 0; i--) {
-        final date = now.subtract(Duration(days: i));
-        final startOfDay = DateTime(date.year, date.month, date.day);
-        final endOfDay = startOfDay.add(const Duration(days: 1));
+      // Requêtes en parallèle pour chaque jour
+      final futures = List.generate(7, (i) {
+        final date = now.subtract(Duration(days: 6 - i));
+        return _fetchDayActivity(date);
+      });
 
-        final usersCount = await SupabaseConfig.client
-            .from('users')
-            .select('id')
-            .gte('created_at', startOfDay.toIso8601String())
-            .lt('created_at', endOfDay.toIso8601String());
-
-        final postsCount = await SupabaseConfig.client
-            .from('network_posts')
-            .select('id')
-            .gte('created_at', startOfDay.toIso8601String())
-            .lt('created_at', endOfDay.toIso8601String())
-            .eq('status', 'public');
-
-        final articlesCount = await SupabaseConfig.client
-            .from('news_articles')
-            .select('id')
-            .gte('created_at', startOfDay.toIso8601String())
-            .lt('created_at', endOfDay.toIso8601String())
-            .eq('status', 'published');
-
-        activities.add(DailyActivity(
-          date: date,
-          usersCount: (usersCount as List).length,
-          postsCount: (postsCount as List).length,
-          articlesCount: (articlesCount as List).length,
-        ));
-      }
-
+      final results = await Future.wait(futures);
+      activities.addAll(results);
       return activities;
     } catch (e) {
-      debugPrint('[Dashboard] Erreur fetch activity: $e');
-      return [];
+      _logError('_fetchWeeklyActivity', e, null);
+      return _generateEmptyWeek();
     }
   }
 
-  Future<List<SystemAlert>> _fetchAlerts() async {
+  Future<DailyActivity> _fetchDayActivity(DateTime date) async {
+    final start = DateTime(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+
     try {
-      final alerts = <SystemAlert>[];
+      final results = await Future.wait([
+        _countInRange('users', start, end),
+        _countInRange('network_posts', start, end, extraFilters: {'status': 'public'}),
+        _countInRange('news_articles', start, end, extraFilters: {'status': 'published'}),
+      ]);
 
-      // Signalements en attente
-      final pendingReports = await _countPendingReports();
-      if (pendingReports > 0) {
-        alerts.add(SystemAlert(
-          id: 'reports_${DateTime.now().millisecondsSinceEpoch}',
-          type: 'report',
-          title: 'Signalements non traités',
-          message: '$pendingReports signalements en attente de modération',
-          count: pendingReports,
-          createdAt: DateTime.now(),
-          severity: pendingReports > 10 ? 'high' : 'medium',
-        ));
-      }
-
-      // Demandes de certification en attente
-      try {
-        final pendingCertifications = await SupabaseService.select(
-          'enterprise_certifications',
-          select: 'id',
-          filters: {'status': 'pending'},
-        );
-        
-        final certCount = pendingCertifications.length;
-        if (certCount > 0) {
-          alerts.add(SystemAlert(
-            id: 'certifications_${DateTime.now().millisecondsSinceEpoch}',
-            type: 'certification',
-            title: 'Certifications en attente',
-            message: '$certCount demandes de certification à examiner',
-            count: certCount,
-            createdAt: DateTime.now(),
-            severity: 'medium',
-          ));
-        }
-      } catch (e) {
-        debugPrint('[Dashboard] Erreur certifications: $e');
-      }
-
-      // Utilisateurs en attente de suppression
-      try {
-        final pendingDeletions = await SupabaseService.select(
-          'users',
-          select: 'id',
-          filters: {'status': 'pending_deletion'},
-        );
-        
-        final deletionCount = pendingDeletions.length;
-        if (deletionCount > 0) {
-          alerts.add(SystemAlert(
-            id: 'deletions_${DateTime.now().millisecondsSinceEpoch}',
-            type: 'user_deletion',
-            title: 'Suppressions programmées',
-            message: '$deletionCount comptes en attente de suppression',
-            count: deletionCount,
-            createdAt: DateTime.now(),
-            severity: 'low',
-          ));
-        }
-      } catch (e) {
-        debugPrint('[Dashboard] Erreur deletions: $e');
-      }
-
-      return alerts;
+      return DailyActivity(
+        date: date,
+        usersCount: results[0],
+        postsCount: results[1],
+        articlesCount: results[2],
+      );
     } catch (e) {
-      debugPrint('[Dashboard] Erreur fetch alerts: $e');
-      return [];
+      return DailyActivity(
+        date: date,
+        usersCount: 0,
+        postsCount: 0,
+        articlesCount: 0,
+      );
     }
+  }
+
+  Future<int> _countInRange(
+    String table,
+    DateTime start,
+    DateTime end, {
+    Map<String, dynamic>? extraFilters,
+  }) async {
+    try {
+      var query = SupabaseConfig.client
+          .from(table)
+          .select('id')
+          .gte('created_at', start.toIso8601String())
+          .lt('created_at', end.toIso8601String());
+
+      if (extraFilters != null) {
+        for (final entry in extraFilters.entries) {
+          query = query.eq(entry.key, entry.value);
+        }
+      }
+
+      final response = await query;
+      return (response as List).length;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /// 🚨 Génération des alertes système
+  Future<List<SystemAlert>> _fetchAlerts() async {
+    final alerts = <SystemAlert>[];
+    final now = DateTime.now();
+
+    // 1. Signalements en attente
+    final pendingReports = await _safeCount('reports', filters: {'status': 'pending'});
+    if (pendingReports > 0) {
+      alerts.add(SystemAlert(
+        id: 'reports',
+        type: 'report',
+        title: 'Signalements non traités',
+        message: '$pendingReports signalement${pendingReports > 1 ? 's' : ''} en attente de modération',
+        count: pendingReports,
+        createdAt: now,
+        severity: pendingReports > 10 ? 'high' : (pendingReports > 5 ? 'medium' : 'low'),
+      ));
+    }
+
+    // 2. Certifications en attente
+    final pendingCerts = await _safeCount('enterprise_certifications', filters: {'status': 'pending'});
+    if (pendingCerts > 0) {
+      alerts.add(SystemAlert(
+        id: 'certifications',
+        type: 'certification',
+        title: 'Certifications en attente',
+        message: '$pendingCerts demande${pendingCerts > 1 ? 's' : ''} de certification à examiner',
+        count: pendingCerts,
+        createdAt: now,
+        severity: 'medium',
+      ));
+    }
+
+    // 3. Comptes en attente de suppression
+    final pendingDeletions = await _safeCount('users', filters: {'status': 'pending_deletion'});
+    if (pendingDeletions > 0) {
+      alerts.add(SystemAlert(
+        id: 'deletions',
+        type: 'user_deletion',
+        title: 'Suppressions programmées',
+        message: '$pendingDeletions compte${pendingDeletions > 1 ? 's' : ''} en attente de suppression définitive',
+        count: pendingDeletions,
+        createdAt: now,
+        severity: 'low',
+      ));
+    }
+
+    // 4. Comptes suspendus
+    final suspended = await _safeCount('users', filters: {'status': 'deactivated'});
+    if (suspended > 0) {
+      alerts.add(SystemAlert(
+        id: 'suspended',
+        type: 'suspended_users',
+        title: 'Comptes suspendus',
+        message: '$suspended compte${suspended > 1 ? 's' : ''} actuellement suspendu${suspended > 1 ? 's' : ''}',
+        count: suspended,
+        createdAt: now,
+        severity: 'low',
+      ));
+    }
+
+    // Tri : critiques d'abord
+    alerts.sort((a, b) {
+      const order = {'high': 0, 'medium': 1, 'low': 2};
+      return (order[a.severity] ?? 3).compareTo(order[b.severity] ?? 3);
+    });
+
+    return alerts;
+  }
+
+  /// 📅 Helpers dates
+  DateTime _startOfDay() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  DateTime _weekAgo() => DateTime.now().subtract(const Duration(days: 7));
+
+  List<DailyActivity> _generateEmptyWeek() {
+    final now = DateTime.now();
+    return List.generate(
+      7,
+      (i) => DailyActivity(
+        date: now.subtract(Duration(days: 6 - i)),
+        usersCount: 0,
+        postsCount: 0,
+        articlesCount: 0,
+      ),
+    );
   }
 
   String _formatError(dynamic error) {
@@ -321,8 +332,21 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     }
     return 'Une erreur inattendue s\'est produite';
   }
+
+  void _logError(String source, Object error, StackTrace? stack) {
+    if (!kDebugMode) return;
+    debugPrint('❌ [Dashboard/$source] $error');
+    if (stack != null) debugPrint(stack.toString());
+  }
+
+  void _logInfo(String message) {
+    if (!kDebugMode) return;
+    debugPrint('ℹ️ [Dashboard] $message');
+  }
 }
 
-final dashboardProvider = StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
+/// 🎯 Provider Riverpod
+final dashboardProvider =
+    StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
   return DashboardNotifier();
 });
