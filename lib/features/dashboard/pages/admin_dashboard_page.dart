@@ -208,7 +208,7 @@ class AdminDashboardPage extends ConsumerWidget {
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
           childAspectRatio: isDesktop ? 1.6 : 1.4,
-          children: const List.generate(4, (_) => StatCardSkeleton()),
+          children: List.generate(4, (_) => const StatCardSkeleton()),
         );
       },
     );
