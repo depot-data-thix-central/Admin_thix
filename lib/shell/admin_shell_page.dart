@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_admin/core/app_colors.dart';
 import 'package:thix_admin/features/certifications/pages/admin_enterprise_certifications_page.dart';
+import 'package:thix_admin/features/dashboard/pages/admin_dashboard_page.dart';
 
 class AdminModule {
   final String title;
@@ -25,13 +26,21 @@ class _AdminShellPageState extends State<AdminShellPage> {
 
   static final _modules = <AdminModule>[
     AdminModule(
+      title: 'Dashboard',
+      icon: Icons.dashboard_rounded,
+      builder: (_) => const AdminDashboardPage(),
+    ),
+    AdminModule(
       title: 'Certifications Entreprise',
       icon: Icons.business_center_rounded,
       builder: (_) => const AdminEnterpriseCertificationsPage(),
     ),
     // Prochains modules à ajouter ici, ex :
-    // AdminModule(title: 'Modération', icon: Icons.flag_rounded, builder: (_) => const AdminModerationPage()),
+    // AdminModule(title: 'Articles', icon: Icons.article_rounded, builder: (_) => const AdminArticlesPage()),
     // AdminModule(title: 'Utilisateurs', icon: Icons.people_rounded, builder: (_) => const AdminUsersPage()),
+    // AdminModule(title: 'Modération', icon: Icons.flag_rounded, builder: (_) => const AdminModerationPage()),
+    // AdminModule(title: 'Annonces', icon: Icons.campaign_rounded, builder: (_) => const AdminAnnouncementsPage()),
+    // AdminModule(title: 'Statistiques', icon: Icons.bar_chart_rounded, builder: (_) => const AdminStatisticsPage()),
   ];
 
   @override
