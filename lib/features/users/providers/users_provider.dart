@@ -193,10 +193,12 @@ class UsersNotifier extends StateNotifier<UsersState> {
           .from(kTable)
           .update({'account_status': accountStatus}).eq('id', id);
 
+      // ✅ CORRECTION : cast explicite pour éviter l'inférence Object?
       state = state.copyWith(
         isOperating: false,
         users: state.users
-            .map((u) => u.id == id ? u.copyWith(accountStatus: accountStatus) : u)
+            .map<AdminUserProfile>((AdminUserProfile u) =>
+                u.id == id ? u.copyWith(accountStatus: accountStatus) : u)
             .toList(),
       );
       await loadStats();
