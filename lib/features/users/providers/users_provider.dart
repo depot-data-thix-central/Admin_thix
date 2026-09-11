@@ -167,7 +167,8 @@ class UsersNotifier extends StateNotifier<UsersState> {
   Future<int> _count({Map<String, String>? eq}) async {
     var query = SupabaseConfig.client
         .from(kTable)
-        .select('id', CountOption.exact);
+        .select('id').count(CountOption.exact);
+
     if (eq != null) {
       for (final e in eq.entries) {
         query = query.eq(e.key, e.value);
