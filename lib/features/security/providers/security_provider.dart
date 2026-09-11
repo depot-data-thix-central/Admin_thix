@@ -252,13 +252,15 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     }
   }
 
+  // ✅ CORRECTION APPLIQUÉE ICI
   Future<int> _countProfiles({
     DateTime? gteCreated,
     Map<String, String>? eq,
   }) async {
     var query = SupabaseConfig.client
         .from('profiles')
-        .select('id', CountOption.exact);
+        .select('id'); // ⬅️ On retire le CountOption.exact d'ici
+        
     if (gteCreated != null) {
       query = query.gte('created_at', gteCreated.toIso8601String());
     }
@@ -267,7 +269,9 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
         query = query.eq(e.key, e.value);
       }
     }
-    final res = await query;
+    
+    // ⬅️ On l'ajoute ici à la fin
+    final res = await query.count(CountOption.exact);
     return res.count ?? 0;
   }
 
