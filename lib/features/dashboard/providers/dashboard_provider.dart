@@ -1,10 +1,10 @@
 // lib/features/dashboard/providers/dashboard_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
+// ✅ Import de votre service
+import 'package:thix_admin/supabase/supabase_config.dart';
 import '../models/dashboard_stats.dart';
 
-/// 🎯 État du dashboard
 @immutable
 class DashboardState {
   final bool isLoading;
@@ -34,16 +34,11 @@ class DashboardState {
   }
 }
 
-/// 🚀 Provider principal du dashboard
 class DashboardNotifier extends StateNotifier<DashboardState> {
-  final SupabaseClient _supabase;
-  
-  DashboardNotifier(this._supabase) : super(const DashboardState()) {
-    // Chargement initial
+  DashboardNotifier() : super(const DashboardState()) {
     refresh();
   }
 
-  /// 🔄 Rafraîchir toutes les statistiques
   Future<void> refresh() async {
     if (state.isLoading) return;
 
@@ -68,9 +63,7 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     }
   }
 
-  /// 📊 Récupérer toutes les statistiques depuis Supabase
   Future<DashboardStats> _fetchStats() async {
-    // 🔒 REQUÊTES PARALLÈLES OPTIMISÉES
     final results = await Future.wait([
       _countUsers(),
       _countArticles(),
@@ -97,72 +90,66 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     );
   }
 
-  /// 👥 Compter les utilisateurs (avec RLS)
+  // ✅ Utilisation de SupabaseService
   Future<int> _countUsers() async {
     try {
-      final response = await _supabase
-          .from('users')
-          .select('id', head: true); // 🔒 head: true pour COUNT uniquement
-      
-      return response.count ?? 0;
+      final users = await SupabaseService.select('users', select: 'id');
+      return users.length;
     } catch (e) {
       debugPrint('[Dashboard] Erreur count users: $e');
       return 0;
     }
   }
 
-  /// 📰 Compter les articles publiés
   Future<int> _countArticles() async {
     try {
-      final response = await _supabase
-          .from('news_articles')
-          .select('id')
-          .eq('status', 'published');
-      
-      return (response as List).length;
+      final articles = await SupabaseService.select(
+        'news_articles',
+        select: 'id',
+        filters: {'status': 'published'},
+      );
+      return articles.length;
     } catch (e) {
       debugPrint('[Dashboard] Erreur count articles: $e');
       return 0;
     }
   }
 
-  /// 📝 Compter les posts du réseau social
   Future<int> _countPosts() async {
     try {
-      final response = await _supabase
-          .from('network_posts')
-          .select('id')
-          .eq('status', 'public');
-      
-      return (response as List).length;
+      final posts = await SupabaseService.select(
+        'network_posts',
+        select: 'id',
+        filters: {'status': 'public'},
+      );
+      return posts.length;
     } catch (e) {
       debugPrint('[Dashboard] Erreur count posts: $e');
       return 0;
     }
   }
 
-  /// ⚠️ Compter les signalements en attente
   Future<int> _countPendingReports() async {
     try {
-      final response = await _supabase
-          .from('reports')
-          .select('id')
-          .eq('status', 'pending');
-      
-      return (response as List).length;
+      final reports = await SupabaseService.select(
+        'reports',
+        select: 'id',
+        filters: {'status': 'pending'},
+      );
+      return reports.length;
     } catch (e) {
       debugPrint('[Dashboard] Erreur count reports: $e');
       return 0;
     }
   }
 
-  /// 📈 Nouveaux utilisateurs aujourd'hui
   Future<int> _countNewUsersToday() async {
     try {
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       
-      final response = await _supabase
+      // Utilisation directe du client pour les requêtes complexes
+      final response = await SupabaseConfig.client
           .from('users')
           .select('id')
           .gte('created_at', startOfDay.toIso8601String());
@@ -174,13 +161,12 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     }
   }
 
-  /// 📰 Nouveaux articles cette semaine
   Future<int> _countNewArticlesThisWeek() async {
     try {
       final now = DateTime.now();
       final weekAgo = now.subtract(const Duration(days: 7));
       
-      final response = await _supabase
+      final response = await SupabaseConfig.client
           .from('news_articles')
           .select('id')
           .gte('created_at', weekAgo.toIso8601String())
@@ -193,13 +179,12 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     }
   }
 
-  /// 📝 Nouveaux posts cette semaine
   Future<int> _countNewPostsThisWeek() async {
     try {
       final now = DateTime.now();
       final weekAgo = now.subtract(const Duration(days: 7));
       
-      final response = await _supabase
+      final response = await SupabaseConfig.client
           .from('network_posts')
           .select('id')
           .gte('created_at', weekAgo.toIso8601String())
@@ -212,32 +197,30 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     }
   }
 
-  /// 📊 Activité des 7 derniers jours
   Future<List<DailyActivity>> _fetchWeeklyActivity() async {
     try {
       final now = DateTime.now();
       final activities = <DailyActivity>[];
 
-      // 🔒 Boucle sur les 7 derniers jours
       for (int i = 6; i >= 0; i--) {
         final date = now.subtract(Duration(days: i));
         final startOfDay = DateTime(date.year, date.month, date.day);
         final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        final usersCount = await _supabase
+        final usersCount = await SupabaseConfig.client
             .from('users')
             .select('id')
             .gte('created_at', startOfDay.toIso8601String())
             .lt('created_at', endOfDay.toIso8601String());
 
-        final postsCount = await _supabase
+        final postsCount = await SupabaseConfig.client
             .from('network_posts')
             .select('id')
             .gte('created_at', startOfDay.toIso8601String())
             .lt('created_at', endOfDay.toIso8601String())
             .eq('status', 'public');
 
-        final articlesCount = await _supabase
+        final articlesCount = await SupabaseConfig.client
             .from('news_articles')
             .select('id')
             .gte('created_at', startOfDay.toIso8601String())
@@ -259,12 +242,11 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     }
   }
 
-  /// ⚠️ Récupérer les alertes système
   Future<List<SystemAlert>> _fetchAlerts() async {
     try {
       final alerts = <SystemAlert>[];
 
-      // 🔴 Signalements en attente
+      // Signalements en attente
       final pendingReports = await _countPendingReports();
       if (pendingReports > 0) {
         alerts.add(SystemAlert(
@@ -278,14 +260,15 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
         ));
       }
 
-      // 🔵 Demandes de certification en attente
+      // Demandes de certification en attente
       try {
-        final pendingCertifications = await _supabase
-            .from('enterprise_certifications')
-            .select('id')
-            .eq('status', 'pending');
+        final pendingCertifications = await SupabaseService.select(
+          'enterprise_certifications',
+          select: 'id',
+          filters: {'status': 'pending'},
+        );
         
-        final certCount = (pendingCertifications as List).length;
+        final certCount = pendingCertifications.length;
         if (certCount > 0) {
           alerts.add(SystemAlert(
             id: 'certifications_${DateTime.now().millisecondsSinceEpoch}',
@@ -301,14 +284,15 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
         debugPrint('[Dashboard] Erreur certifications: $e');
       }
 
-      // 🟡 Utilisateurs en attente de suppression
+      // Utilisateurs en attente de suppression
       try {
-        final pendingDeletions = await _supabase
-            .from('users')
-            .select('id')
-            .eq('status', 'pending_deletion');
+        final pendingDeletions = await SupabaseService.select(
+          'users',
+          select: 'id',
+          filters: {'status': 'pending_deletion'},
+        );
         
-        final deletionCount = (pendingDeletions as List).length;
+        final deletionCount = pendingDeletions.length;
         if (deletionCount > 0) {
           alerts.add(SystemAlert(
             id: 'deletions_${DateTime.now().millisecondsSinceEpoch}',
@@ -331,20 +315,14 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
     }
   }
 
-  /// 🔒 Formatage sécurisé des erreurs
   String _formatError(dynamic error) {
-    if (error is PostgrestException) {
-      return 'Erreur base de données: ${error.message}';
-    }
-    if (error is AuthException) {
-      return 'Erreur d\'authentification: ${error.message}';
+    if (error is Exception) {
+      return error.toString().replaceAll('Exception: ', '');
     }
     return 'Une erreur inattendue s\'est produite';
   }
 }
 
-/// 🎯 Provider exposé
 final dashboardProvider = StateNotifierProvider<DashboardNotifier, DashboardState>((ref) {
-  final supabase = Supabase.instance.client;
-  return DashboardNotifier(supabase);
+  return DashboardNotifier();
 });
