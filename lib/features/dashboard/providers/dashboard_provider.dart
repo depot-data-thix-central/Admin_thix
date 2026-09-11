@@ -92,11 +92,11 @@ class DashboardNotifier extends StateNotifier<DashboardState> {
   /// 📊 Collecte parallèle de toutes les stats
   Future<DashboardStats> _fetchAllStats() async {
     final results = await Future.wait([
-      _safeCount('users', filters: null),
+      _safeCount('profiles', filters: null),
       _safeCount('news_articles', filters: {'status': 'published'}),
       _safeCount('network_posts', filters: {'status': 'public'}),
       _safeCount('reports', filters: {'status': 'pending'}),
-      _countSince('users', _startOfDay()),
+      _countSince('profiles', _startOfDay()),
       _countSince('news_articles', _weekAgo(), extraFilters: {'status': 'published'}),
       _countSince('network_posts', _weekAgo(), extraFilters: {'status': 'public'}),
       _fetchWeeklyActivity(),
