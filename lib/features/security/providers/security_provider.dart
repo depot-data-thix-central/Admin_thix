@@ -14,6 +14,7 @@ class SecurityState {
   final DateTime? lastRefresh;
   final String? filterSeverity;
   final String? filterType;
+  final String? filterSource; // ⬅️ AJOUT : mobile_app | admin_web | null
   final String search;
 
   const SecurityState({
@@ -23,6 +24,7 @@ class SecurityState {
     this.lastRefresh,
     this.filterSeverity,
     this.filterType,
+    this.filterSource, // ⬅️ AJOUT
     this.search = '',
   });
 
@@ -36,6 +38,8 @@ class SecurityState {
     bool clearSeverity = false,
     String? filterType,
     bool clearType = false,
+    String? filterSource, // ⬅️ AJOUT
+    bool clearSource = false, // ⬅️ AJOUT
     String? search,
   }) {
     return SecurityState(
@@ -45,6 +49,7 @@ class SecurityState {
       lastRefresh: lastRefresh ?? this.lastRefresh,
       filterSeverity: clearSeverity ? null : (filterSeverity ?? this.filterSeverity),
       filterType: clearType ? null : (filterType ?? this.filterType),
+      filterSource: clearSource ? null : (filterSource ?? this.filterSource), // ⬅️ AJOUT
       search: search ?? this.search,
     );
   }
@@ -53,11 +58,16 @@ class SecurityState {
 /// 🎛️ Notifier monitoring sécurité
 class SecurityNotifier extends StateNotifier<SecurityState> {
   SecurityNotifier() : super(const SecurityState()) {
-    Future.delayed(const Duration(milliseconds: 150), () => refresh());
+    Future.delayed(const Duration(milliseconds: 150), () {
+      refresh();
+      loadProfileSignals(); // ⬅️ AJOUT : charger les signaux profils
+    });
   }
 
   static const String kTable = 'security_events';
   static const int kBruteForceThreshold = 5; // ≥ 5 échecs / 24 h = menace
+  static const String kSourceMobile = 'mobile_app'; // ⬅️ AJOUT
+  static const String kSourceAdmin = 'admin_web'; // ⬅️ AJOUT
 
   // ─── CHARGEMENT (7 derniers jours, max 1000) ───
   Future<void> refresh({bool silent = false}) async {
@@ -98,6 +108,11 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     );
   }
 
+  // ⬇️ AJOUT : filtre par source
+  void setSourceFilter(String? source) {
+    state = state.copyWith(filterSource: source, clearSource: source == null);
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // 📊 STATISTIQUES CALCULÉES
   // ═══════════════════════════════════════════════════════════════
@@ -118,6 +133,25 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
       _countSince(const Duration(hours: 24), type: SecurityEventType.clientError);
 
   int get critical7d => _countSince(const Duration(days: 7), criticalOnly: true);
+
+  // ─── 📱 ÉVÉNEMENTS PAR SOURCE (24 h) ───
+  int get mobileEvents24h => _countSinceSource(
+        const Duration(hours: 24),
+        source: kSourceMobile,
+      );
+
+  int get adminEvents24h => _countSinceSource(
+        const Duration(hours: 24),
+        source: kSourceAdmin,
+      );
+
+  int _countSinceSource(Duration window, {required String source}) {
+    final cutoff = DateTime.now().subtract(window);
+    return state.events
+        .where((e) => e.createdAt.isAfter(cutoff))
+        .where((e) => e.source == source)
+        .length;
+  }
 
   // ─── 🔑 DÉTECTION BRUTE FORCE ───
   List<BruteForceThreat> get bruteForceThreats {
@@ -176,6 +210,67 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     return list.take(5).toList();
   }
 
+  // ─── 📱 SIGNAUX APPLICATIFS (mobile + profils) ───
+  AppSignals get appSignals => AppSignals(
+        mobileEvents24h: mobileEvents24h,
+        mobileLoginFailures24h: state.events
+            .where((e) => e.source == kSourceMobile)
+            .where((e) => e.eventType == SecurityEventType.loginFailed)
+            .where((e) => e.createdAt.isAfter(
+                DateTime.now().subtract(const Duration(hours: 24))))
+            .length,
+        mobileErrors24h: state.events
+            .where((e) => e.source == kSourceMobile)
+            .where((e) => e.eventType == SecurityEventType.clientError)
+            .where((e) => e.createdAt.isAfter(
+                DateTime.now().subtract(const Duration(hours: 24))))
+            .length,
+        newAccounts24h: _profileSignals.newAccounts24h,
+        suspended: _profileSignals.suspended,
+        pendingDeletion: _profileSignals.pendingDeletion,
+      );
+
+  ProfileSignals _profileSignals = const ProfileSignals();
+
+  /// 📡 Chargement des signaux profils (table profiles)
+  Future<void> loadProfileSignals() async {
+    try {
+      final cutoff = DateTime.now().subtract(const Duration(hours: 24));
+      final results = await Future.wait([
+        _countProfiles(gteCreated: cutoff),
+        _countProfiles(eq: {'account_status': 'deactivated'}),
+        _countProfiles(eq: {'status': 'pending_deletion'}),
+      ]);
+      _profileSignals = ProfileSignals(
+        newAccounts24h: results[0],
+        suspended: results[1],
+        pendingDeletion: results[2],
+      );
+      state = state.copyWith(); // notifie
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [Security] signaux profils : $e');
+    }
+  }
+
+  Future<int> _countProfiles({
+    DateTime? gteCreated,
+    Map<String, String>? eq,
+  }) async {
+    var query = SupabaseConfig.client
+        .from('profiles')
+        .select('id', CountOption.exact);
+    if (gteCreated != null) {
+      query = query.gte('created_at', gteCreated.toIso8601String());
+    }
+    if (eq != null) {
+      for (final e in eq.entries) {
+        query = query.eq(e.key, e.value);
+      }
+    }
+    final res = await query;
+    return res.count ?? 0;
+  }
+
   // ───  LISTE FILTRÉE ───
   List<SecurityEvent> get filteredEvents {
     var list = state.events;
@@ -185,6 +280,9 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
     }
     if (f.filterType != null) {
       list = list.where((e) => e.eventType == f.filterType).toList();
+    }
+    if (f.filterSource != null) { // ⬅️ AJOUT
+      list = list.where((e) => e.source == f.filterSource).toList();
     }
     if (f.search.trim().isNotEmpty) {
       final s = f.search.toLowerCase();
@@ -213,6 +311,40 @@ final securityProvider =
     StateNotifierProvider<SecurityNotifier, SecurityState>((ref) {
   return SecurityNotifier();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 📊 MODÈLES DE SIGNAUX
+// ═══════════════════════════════════════════════════════════════
+
+@immutable
+class ProfileSignals {
+  final int newAccounts24h;
+  final int suspended;
+  final int pendingDeletion;
+  const ProfileSignals({
+    this.newAccounts24h = 0,
+    this.suspended = 0,
+    this.pendingDeletion = 0,
+  });
+}
+
+@immutable
+class AppSignals {
+  final int mobileEvents24h;
+  final int mobileLoginFailures24h;
+  final int mobileErrors24h;
+  final int newAccounts24h;
+  final int suspended;
+  final int pendingDeletion;
+  const AppSignals({
+    this.mobileEvents24h = 0,
+    this.mobileLoginFailures24h = 0,
+    this.mobileErrors24h = 0,
+    this.newAccounts24h = 0,
+    this.suspended = 0,
+    this.pendingDeletion = 0,
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════
 // 📡 REPORTER — appelé par login, crashs, actions admin
