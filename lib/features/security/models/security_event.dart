@@ -97,7 +97,7 @@ class SecuritySeverity {
   }
 }
 
-/// 🛡️ Événement de sécurité (mirroir de security_events)
+/// 🛡️ Événement de sécurité
 @immutable
 class SecurityEvent {
   final String id;
@@ -111,6 +111,9 @@ class SecurityEvent {
   final String message;
   final Map<String, dynamic> metadata;
   final DateTime createdAt;
+  final String status; // new | acknowledged | resolved
+  final String? handledBy;
+  final DateTime? handledAt;
 
   const SecurityEvent({
     required this.id,
@@ -124,6 +127,9 @@ class SecurityEvent {
     required this.message,
     this.metadata = const {},
     required this.createdAt,
+    this.status = 'new',
+    this.handledBy,
+    this.handledAt,
   });
 
   factory SecurityEvent.fromJson(Map<String, dynamic> json) {
@@ -139,6 +145,9 @@ class SecurityEvent {
       message: json['message']?.toString() ?? '',
       metadata: (json['metadata'] as Map?)?.cast<String, dynamic>() ?? const {},
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
+      status: json['status']?.toString() ?? 'new',
+      handledBy: json['handled_by']?.toString(),
+      handledAt: _parseDate(json['handled_at']),
     );
   }
 
@@ -148,16 +157,9 @@ class SecurityEvent {
     return null;
   }
 
+  bool get isHandled => status != 'new';
   bool get isCritical =>
       severity == SecuritySeverity.critical || severity == SecuritySeverity.high;
-
-  String get timeLabel {
-    try {
-      return DateFormat('dd MMM • HH:mm:ss', 'fr_FR').format(createdAt);
-    } catch (_) {
-      return createdAt.toIso8601String();
-    }
-  }
 
   String get relativeLabel {
     final diff = DateTime.now().difference(createdAt);
@@ -168,31 +170,32 @@ class SecurityEvent {
   }
 }
 
-/// 🔑 Menace de type brute force (compte qui force l'accès)
+/// 🔑 Menace brute force
 @immutable
 class BruteForceThreat {
   final String identifier;
   final int attempts;
   final DateTime lastAttempt;
   final Set<String> ipAddresses;
+  final String? userId; // ⬅️ AJOUT : compte lié si connu
 
   const BruteForceThreat({
     required this.identifier,
     required this.attempts,
     required this.lastAttempt,
     required this.ipAddresses,
+    this.userId,
   });
 
-  String get severity =>
-      attempts >= 10
-          ? SecuritySeverity.critical
-          : (attempts >= 7 ? SecuritySeverity.high : SecuritySeverity.medium);
+  String get severity => attempts >= 10
+      ? SecuritySeverity.critical
+      : (attempts >= 7 ? SecuritySeverity.high : SecuritySeverity.medium);
 
   String get description =>
       '$attempts tentatives échouées en 24 h depuis ${ipAddresses.length} IP différente(s)';
 }
 
-/// 🐛 Erreur agrégée (top des crashs)
+/// 🐛 Erreur agrégée
 @immutable
 class AggregatedError {
   final String message;
@@ -204,4 +207,57 @@ class AggregatedError {
     required this.count,
     required this.lastOccurrence,
   });
+}
+
+/// ⛔ Entrée de liste noire
+@immutable
+class SecurityBlock {
+  final String id;
+  final String type; // identifier | ip
+  final String value;
+  final String reason;
+  final String severity;
+  final DateTime? expiresAt;
+  final bool active;
+  final DateTime createdAt;
+
+  const SecurityBlock({
+    required this.id,
+    required this.type,
+    required this.value,
+    required this.reason,
+    required this.severity,
+    this.expiresAt,
+    required this.active,
+    required this.createdAt,
+  });
+
+  factory SecurityBlock.fromJson(Map<String, dynamic> json) {
+    return SecurityBlock(
+      id: json['id']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'identifier',
+      value: json['value']?.toString() ?? '',
+      reason: json['reason']?.toString() ?? '',
+      severity: json['severity']?.toString() ?? 'high',
+      expiresAt: json['expires_at'] != null
+          ? DateTime.tryParse(json['expires_at'].toString())?.toLocal()
+          : null,
+      active: json['active'] == true,
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+
+  bool get isPermanent => expiresAt == null;
+  bool get isExpired =>
+      expiresAt != null && expiresAt!.isBefore(DateTime.now());
+
+  String get expiryLabel {
+    if (isPermanent) return 'Définitif';
+    if (isExpired) return 'Expiré';
+    final remaining = expiresAt!.difference(DateTime.now());
+    if (remaining.inHours < 1) return 'Expire dans ${remaining.inMinutes} min';
+    if (remaining.inDays < 1) return 'Expire dans ${remaining.inHours} h';
+    return 'Expire dans ${remaining.inDays} j';
+  }
 }
