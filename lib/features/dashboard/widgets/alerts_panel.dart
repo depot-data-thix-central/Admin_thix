@@ -1,9 +1,9 @@
-// lib/features/dashboard/widgets/alerts_panel.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+
+import '../../../core/app_colors.dart';
 import '../models/dashboard_stats.dart';
 
-/// ⚠️ Panneau d'alertes système
+/// 🚨 Panneau d'alertes système
 class AlertsPanel extends StatelessWidget {
   final List<SystemAlert> alerts;
   final VoidCallback? onRefresh;
@@ -20,83 +20,148 @@ class AlertsPanel extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFECEEF4)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Header ──
           Row(
             children: [
-              const Text(
-                'Alertes Récentes',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF101840),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: AppColors.warning,
+                  size: 20,
                 ),
               ),
-              const Spacer(),
-              if (onRefresh != null)
-                IconButton(
-                  icon: const Icon(Icons.refresh, size: 20),
-                  onPressed: onRefresh,
-                  tooltip: 'Rafraîchir',
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Alertes',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF101840),
+                  ),
+                ),
+              ),
+              if (alerts.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: alerts.any((a) => a.isCritical)
+                        ? AppColors.danger
+                        : AppColors.warning,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${alerts.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 20),
+
+          // ── Contenu ──
           if (alerts.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(40),
-                child: Column(
-                  children: [
-                    Icon(Icons.check_circle_outline, 
-                         size: 48, 
-                         color: Colors.grey[400]),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Aucune alerte',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
+            const _EmptyAlerts()
           else
-            ...alerts.map(_buildAlertItem),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: alerts.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => _AlertTile(alert: alerts[i]),
+              ),
+            ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildAlertItem(SystemAlert alert) {
-    final colors = _getSeverityColors(alert.severity);
-    final icon = _getAlertIcon(alert.type);
-    
+class _EmptyAlerts extends StatelessWidget {
+  const _EmptyAlerts();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 48,
+            color: AppColors.success.withOpacity(0.4),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Tout est sous contrôle',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF101840),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Aucune alerte à traiter',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlertTile extends StatelessWidget {
+  final SystemAlert alert;
+
+  const _AlertTile({required this.alert});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _getColor();
+    final icon = _getIcon();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.border),
+        color: color.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.15)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: colors.icon.withOpacity(0.2),
+              color: color.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: colors.icon, size: 20),
+            child: Icon(icon, size: 16, color: color),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,115 +169,78 @@ class AlertsPanel extends StatelessWidget {
                 Text(
                   alert.title,
                   style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                     color: Color(0xFF101840),
                   ),
                 ),
-                if (alert.message != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    alert.message!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  alert.message,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF6B7280),
+                    height: 1.3,
                   ),
-                ],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 4),
                 Text(
-                  DateFormat('d MMM à HH:mm').format(alert.createdAt),
+                  alert.relativeTime,
                   style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[500],
+                    fontSize: 10,
+                    color: Colors.grey.shade500,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: colors.badge,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '${alert.count}',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: colors.text,
+          if (alert.count > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${alert.count}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  _SeverityColors _getSeverityColors(String severity) {
-    switch (severity) {
-      case 'critical':
-        return _SeverityColors(
-          background: const Color(0xFFFEF2F2),
-          border: const Color(0xFFFECACA),
-          icon: const Color(0xFFDC2626),
-          badge: const Color(0xFFDC2626),
-          text: Colors.white,
-        );
+  Color _getColor() {
+    switch (alert.severity) {
       case 'high':
-        return _SeverityColors(
-          background: const Color(0xFFFFF7ED),
-          border: const Color(0xFFFED7AA),
-          icon: const Color(0xFFEA580C),
-          badge: const Color(0xFFEA580C),
-          text: Colors.white,
-        );
+        return AppColors.danger;
       case 'medium':
-        return _SeverityColors(
-          background: const Color(0xFFFEFCE8),
-          border: const Color(0xFFFEF08A),
-          icon: const Color(0xFFCA8A04),
-          badge: const Color(0xFFCA8A04),
-          text: Colors.white,
-        );
+        return AppColors.warning;
       default:
-        return _SeverityColors(
-          background: const Color(0xFFF0F9FF),
-          border: const Color(0xFFBAE6FD),
-          icon: const Color(0xFF0284C7),
-          badge: const Color(0xFF0284C7),
-          text: Colors.white,
-        );
+        return AppColors.info;
     }
   }
 
-  IconData _getAlertIcon(String type) {
-    switch (type) {
+  IconData _getIcon() {
+    switch (alert.type) {
       case 'report':
         return Icons.flag_rounded;
       case 'certification':
-        return Icons.verified_user_rounded;
+        return Icons.verified_rounded;
       case 'user_deletion':
-        return Icons.person_remove_rounded;
+        return Icons.person_off_rounded;
+      case 'suspended_users':
+        return Icons.block_rounded;
       default:
-        return Icons.notifications_rounded;
+        return Icons.info_outline_rounded;
     }
   }
-}
-
-class _SeverityColors {
-  final Color background;
-  final Color border;
-  final Color icon;
-  final Color badge;
-  final Color text;
-
-  const _SeverityColors({
-    required this.background,
-    required this.border,
-    required this.icon,
-    required this.badge,
-    required this.text,
-  });
 }
