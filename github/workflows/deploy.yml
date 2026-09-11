@@ -1,0 +1,77 @@
+name: Deploy THIX Admin to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# ═══════════════════════════════════════════════════════════════
+# ⚠️ IMPORTANT : Le nom EXACT de votre repo GitHub
+# Si votre repo s'appelle "Admin_thix" → base-href = /Admin_thix/
+# ═══════════════════════════════════════════════════════════════
+env:
+  FLUTTER_VERSION: '3.24.x'
+  REPO_NAME: 'Admin_thix'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: 🌐 Enable Web
+        run: flutter config --enable-web
+
+      - name: 📚 Get dependencies
+        run: flutter pub get
+
+      - name: 🏗️ Generate code (build_runner)
+        run: |
+          if grep -q "build_runner" pubspec.yaml; then
+            dart run build_runner build --delete-conflicting-outputs
+          else
+            echo "No build_runner — skip"
+          fi
+
+      # ═══════════════════════════════════════════════════════════
+      # 🔨 BUILD SIMPLE (utilise les valeurs par défaut du code)
+      # ═══════════════════════════════════════════════════════════
+      - name: 🔨 Build Web (Release)
+        run: |
+          flutter build web \
+            --release \
+            --web-renderer canvaskit \
+            --base-href /${{ env.REPO_NAME }}/
+
+      # ═══════════════════════════════════════════════════════════
+      # 🚀 DÉPLOIEMENT SUR GH-PAGES
+      # ═══════════════════════════════════════════════════════════
+      - name: 🚀 Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: '🚀 Deploy THIX Admin - ${{ github.sha }}'
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
