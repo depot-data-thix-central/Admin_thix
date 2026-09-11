@@ -1,11 +1,13 @@
-// lib/features/dashboard/pages/admin_dashboard_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
 import '../../../core/app_colors.dart';
+import '../models/dashboard_stats.dart';
 import '../providers/dashboard_provider.dart';
-import '../widgets/stat_card.dart';
 import '../widgets/activity_chart.dart';
 import '../widgets/alerts_panel.dart';
+import '../widgets/stat_card.dart';
 
 /// 🏠 Page Dashboard Admin
 class AdminDashboardPage extends ConsumerWidget {
@@ -20,6 +22,7 @@ class AdminDashboardPage extends ConsumerWidget {
       backgroundColor: const Color(0xFFF7F8FB),
       body: RefreshIndicator(
         onRefresh: notifier.refresh,
+        color: AppColors.primary,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(24),
@@ -31,41 +34,70 @@ class AdminDashboardPage extends ConsumerWidget {
               const SizedBox(height: 24),
 
               // ⚠️ Erreur
-              if (state.error != null) _buildError(state.error!),
-              
+              if (state.error != null) _buildError(state.error!, notifier),
+              if (state.error != null) const SizedBox(height: 16),
+
+              // ⏳ Premier chargement (skeleton)
+              if (state.isFirstLoad) _buildSkeletonGrid(),
+
               // 📊 Cartes de statistiques
-              if (state.stats != null) ...[
+              if (state.stats != null && !state.isFirstLoad) ...[
                 _buildStatsGrid(state.stats!),
                 const SizedBox(height: 24),
-                
+
                 // 📈 Graphique + Alertes
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: ActivityChart(activities: state.stats!.weeklyActivity),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 1,
-                      child: AlertsPanel(
-                        alerts: state.stats!.alerts,
-                        onRefresh: notifier.refresh,
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth > 900;
+                    if (isWide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: ActivityChart(
+                              activities: state.stats!.weeklyActivity,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 1,
+                            child: AlertsPanel(
+                              alerts: state.stats!.alerts,
+                              onRefresh: notifier.refresh,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        ActivityChart(
+                          activities: state.stats!.weeklyActivity,
+                        ),
+                        const SizedBox(height: 16),
+                        AlertsPanel(
+                          alerts: state.stats!.alerts,
+                          onRefresh: notifier.refresh,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 32),
+
+                // ── Footer ──
+                if (state.lastRefresh != null)
+                  Center(
+                    child: Text(
+                      'Dernière mise à jour : ${DateFormat('dd MMM yyyy à HH:mm', 'fr_FR').format(state.lastRefresh!)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
                       ),
                     ),
-                  ],
-                ),
-              ],
-
-              // ⏳ Loading
-              if (state.isLoading && state.stats == null)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(60),
-                    child: CircularProgressIndicator(),
                   ),
-                ),
+              ],
             ],
           ),
         ),
@@ -76,11 +108,11 @@ class AdminDashboardPage extends ConsumerWidget {
   Widget _buildHeader(DashboardState state, DashboardNotifier notifier) {
     return Row(
       children: [
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              const Text(
                 'Dashboard',
                 style: TextStyle(
                   fontSize: 28,
@@ -89,13 +121,31 @@ class AdminDashboardPage extends ConsumerWidget {
                   letterSpacing: -0.5,
                 ),
               ),
-              SizedBox(height: 4),
-              Text(
-                'Vue d\'ensemble de la plateforme THIX',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Text(
+                    'Vue d\'ensemble de la plateforme THIX',
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  if (state.isPullToRefresh) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Mise à jour…',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -110,14 +160,10 @@ class AdminDashboardPage extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.check_circle,
-                  size: 16,
-                  color: AppColors.success,
-                ),
+                const Icon(Icons.check_circle, size: 16, color: AppColors.success),
                 const SizedBox(width: 6),
-                Text(
-                  'Mis à jour',
+                const Text(
+                  'À jour',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -134,7 +180,7 @@ class AdminDashboardPage extends ConsumerWidget {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
               : const Icon(Icons.refresh, size: 18),
           label: const Text('Rafraîchir'),
@@ -148,14 +194,33 @@ class AdminDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatsGrid(dynamic stats) {
+  Widget _buildSkeletonGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth > 1200;
         final isTablet = constraints.maxWidth > 768;
-        
         final crossAxisCount = isDesktop ? 4 : (isTablet ? 2 : 1);
-        
+
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: isDesktop ? 1.6 : 1.4,
+          children: const List.generate(4, (_) => StatCardSkeleton()),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatsGrid(DashboardStats stats) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth > 1200;
+        final isTablet = constraints.maxWidth > 768;
+        final crossAxisCount = isDesktop ? 4 : (isTablet ? 2 : 1);
+
         return GridView.count(
           crossAxisCount: crossAxisCount,
           shrinkWrap: true,
@@ -202,18 +267,25 @@ class AdminDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildError(String error) {
+  Widget _buildError(String error, DashboardNotifier notifier) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.danger.withOpacity(0.1),
+        color: AppColors.danger.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.danger.withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, color: AppColors.danger, size: 24),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.danger.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -222,19 +294,29 @@ class AdminDashboardPage extends ConsumerWidget {
                 const Text(
                   'Erreur de chargement',
                   style: TextStyle(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.danger,
+                    fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   error,
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.danger.withOpacity(0.8),
+                    color: AppColors.danger.withOpacity(0.85),
                   ),
                 ),
               ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: notifier.refresh,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Réessayer'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
           ),
         ],
