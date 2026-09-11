@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../supabase/supabase_config.dart';
-import 'package:features/users/models/admin_user_profile.dart';
+import 'package:thix_admin/features/users/models/admin_user_profile.dart';
+
 
 /// 📦 État
 @immutable
