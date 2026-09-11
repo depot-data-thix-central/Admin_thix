@@ -4,6 +4,10 @@ import 'package:thix_admin/core/app_colors.dart';
 import 'package:thix_admin/features/certifications/pages/admin_enterprise_certifications_page.dart';
 import 'package:thix_admin/features/dashboard/pages/admin_dashboard_page.dart';
 import 'package:thix_admin/features/articles/pages/admin_articles_page.dart'; 
+import 'package:thix_admin/features/users/pages/admin_users_page.dart';
+
+
+
 class AdminModule {
   final String title;
   final IconData icon;
@@ -29,6 +33,11 @@ class _AdminShellPageState extends State<AdminShellPage> {
       title: 'Dashboard',
       icon: Icons.dashboard_rounded,
       builder: (_) => const AdminDashboardPage(),
+    ),
+    AdminModule(
+      title: 'Utilisateurs',
+      icon: Icons.people_rounded,
+      builder: (_) => const AdminUsersPage(),
     ),
     AdminModule(
       title: 'Certifications Entreprise',
