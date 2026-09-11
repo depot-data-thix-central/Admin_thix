@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/app_colors.dart';
 import '../models/security_event.dart';
 import '../providers/security_provider.dart';
+import '../widgets/app_signals_panel.dart'; // ⬅️ AJOUT
 
 /// 🛡️ Page monitoring sécurité
 class AdminSecurityPage extends ConsumerStatefulWidget {
@@ -24,7 +25,6 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
-    // Auto-refresh toutes les 60 s
     _autoRefresh = Timer.periodic(
       const Duration(seconds: 60),
       (_) => ref.read(securityProvider.notifier).refresh(silent: true),
@@ -106,7 +106,7 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
             ),
           ),
 
-          // ── Tabs ─
+          // ── Tabs ──
           TabBar(
             controller: _tabCtrl,
             labelColor: AppColors.primary,
@@ -238,6 +238,10 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
         ),
         const SizedBox(height: 20),
 
+        // ⬇️ AJOUT : Panneau signaux applicatifs
+        AppSignalsPanel(signals: notifier.appSignals),
+        const SizedBox(height: 20),
+
         // ── Alertes menaces ──
         if (threats.isNotEmpty) ...[
           _sectionTitle('🔑 Comptes qui forcent l\'accès', AppColors.danger),
@@ -318,6 +322,26 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                             style: const TextStyle(fontSize: 12.5))))
                     .toList(),
                 onChanged: (v) => notifier.setFilters(type: v),
+              ),
+              // ⬇️ AJOUT : Filtres par source
+              FilterChip(
+                selected: state.filterSource == null,
+                onSelected: (_) => notifier.setSourceFilter(null),
+                label: const Text('Toutes sources',
+                    style: TextStyle(fontSize: 12)),
+              ),
+              FilterChip(
+                selected: state.filterSource == 'mobile_app',
+                onSelected: (_) => notifier.setSourceFilter('mobile_app'),
+                avatar: const Icon(Icons.phone_android_rounded, size: 14),
+                label: const Text('Application',
+                    style: TextStyle(fontSize: 12)),
+              ),
+              FilterChip(
+                selected: state.filterSource == 'admin_web',
+                onSelected: (_) => notifier.setSourceFilter('admin_web'),
+                avatar: const Icon(Icons.computer_rounded, size: 14),
+                label: const Text('Admin', style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
@@ -639,10 +663,12 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 3),
+                // ⬇️ MODIFIÉ : ajout de la source
                 Text(
                   [
                     if (e.identifier != null) e.identifier!,
                     if (e.ipAddress != null) 'IP ${e.ipAddress}',
+                    e.source == 'mobile_app' ? '📱 APP' : '🖥️ ADMIN',
                     e.relativeLabel,
                   ].join(' • '),
                   style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
