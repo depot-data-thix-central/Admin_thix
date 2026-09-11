@@ -86,11 +86,11 @@ class AdminDashboardPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 32),
 
-                // ── Footer ──
+                // ── Footer : dernière mise à jour (formatage SÉCURISÉ) ──
                 if (state.lastRefresh != null)
                   Center(
                     child: Text(
-                      'Dernière mise à jour : ${DateFormat('dd MMM yyyy à HH:mm', 'fr_FR').format(state.lastRefresh!)}',
+                      'Dernière mise à jour : ${_formatLastRefresh(state.lastRefresh!)}',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey.shade500,
@@ -105,6 +105,9 @@ class AdminDashboardPage extends ConsumerWidget {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // 📍 HEADER
+  // ═══════════════════════════════════════════════════════════════
   Widget _buildHeader(DashboardState state, DashboardNotifier notifier) {
     return Row(
       children: [
@@ -157,12 +160,12 @@ class AdminDashboardPage extends ConsumerWidget {
               color: AppColors.success.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle, size: 16, color: AppColors.success),
-                const SizedBox(width: 6),
-                const Text(
+                Icon(Icons.check_circle, size: 16, color: AppColors.success),
+                SizedBox(width: 6),
+                Text(
                   'À jour',
                   style: TextStyle(
                     fontSize: 12,
@@ -180,7 +183,10 @@ class AdminDashboardPage extends ConsumerWidget {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
                 )
               : const Icon(Icons.refresh, size: 18),
           label: const Text('Rafraîchir'),
@@ -194,6 +200,9 @@ class AdminDashboardPage extends ConsumerWidget {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ⏳ SKELETON (premier chargement)
+  // ═══════════════════════════════════════════════════════════════
   Widget _buildSkeletonGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -208,12 +217,16 @@ class AdminDashboardPage extends ConsumerWidget {
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
           childAspectRatio: isDesktop ? 1.6 : 1.4,
+          // ✅ CORRECTION : const sur chaque élément, pas sur List.generate
           children: List.generate(4, (_) => const StatCardSkeleton()),
         );
       },
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // 📊 GRILLE DE STATISTIQUES
+  // ═══════════════════════════════════════════════════════════════
   Widget _buildStatsGrid(DashboardStats stats) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -257,7 +270,9 @@ class AdminDashboardPage extends ConsumerWidget {
               title: 'Signalements',
               value: _formatNumber(stats.pendingReports),
               icon: Icons.flag_rounded,
-              color: stats.pendingReports > 10 ? AppColors.danger : AppColors.warning,
+              color: stats.pendingReports > 10
+                  ? AppColors.danger
+                  : AppColors.warning,
               subtitle: stats.pendingReports > 0 ? 'À traiter' : 'Aucun',
               change: stats.pendingReports > 10 ? -5 : null,
             ),
@@ -267,6 +282,9 @@ class AdminDashboardPage extends ConsumerWidget {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ⚠️ BANNIÈRE D'ERREUR
+  // ═══════════════════════════════════════════════════════════════
   Widget _buildError(String error, DashboardNotifier notifier) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -284,7 +302,11 @@ class AdminDashboardPage extends ConsumerWidget {
               color: AppColors.danger.withOpacity(0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+            child: const Icon(
+              Icons.error_outline,
+              color: AppColors.danger,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -324,6 +346,11 @@ class AdminDashboardPage extends ConsumerWidget {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🛠️ HELPERS
+  // ═══════════════════════════════════════════════════════════════
+
+  /// 🔢 Formatage des grands nombres (1.2K, 3.4M)
   String _formatNumber(int number) {
     if (number >= 1000000) {
       return '${(number / 1000000).toStringAsFixed(1)}M';
@@ -332,5 +359,19 @@ class AdminDashboardPage extends ConsumerWidget {
       return '${(number / 1000).toStringAsFixed(1)}K';
     }
     return number.toString();
+  }
+
+  /// 📅 CORRECTION : Formatage de date SÉCURISÉ
+  /// (fallback manuel si la locale fr_FR n'est pas initialisée)
+  String _formatLastRefresh(DateTime dt) {
+    try {
+      return DateFormat('dd MMM yyyy à HH:mm', 'fr_FR').format(dt);
+    } catch (_) {
+      final d = dt.day.toString().padLeft(2, '0');
+      final m = dt.month.toString().padLeft(2, '0');
+      final h = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '$d/$m/${dt.year} à $h:$min';
+    }
   }
 }
