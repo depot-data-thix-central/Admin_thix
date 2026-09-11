@@ -286,7 +286,7 @@ class ThixAdminApp extends StatelessWidget {
       ),
 
       // ── Cards ──
-      cardTheme: CardThemeData(
+      cardTheme: const CardTheme(
         elevation: 0,
         color: Colors.white,
         shape: RoundedRectangleBorder(
@@ -296,7 +296,7 @@ class ThixAdminApp extends StatelessWidget {
       ),
 
       // ── Dialogs ──
-      dialogTheme: DialogThemeData(
+      dialogTheme: const DialogTheme(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
