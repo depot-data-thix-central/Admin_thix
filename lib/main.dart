@@ -318,7 +318,7 @@ class ThixAdminApp extends StatelessWidget {
       // ── Chip (tags, filtres) ──
       chipTheme: ChipThemeData(
         backgroundColor: const Color(0xFFF3F4F6),
-        selectedColor: AppColors.primary.withValues(alpha: 0.15),
+        selectedColor: AppColors.primary.withOpacity(0.15),
         labelStyle: const TextStyle(fontSize: 12),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         shape: RoundedRectangleBorder(
