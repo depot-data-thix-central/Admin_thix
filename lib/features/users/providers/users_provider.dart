@@ -164,17 +164,18 @@ class UsersNotifier extends StateNotifier<UsersState> {
     }
   }
 
+  // ✅ CORRECTION ICI : Le query est construit d'abord, puis .count() est appliqué à la fin
   Future<int> _count({Map<String, String>? eq}) async {
-    var query = SupabaseConfig.client
-        .from(kTable)
-        .select('id').count(CountOption.exact);
+    var query = SupabaseConfig.client.from(kTable).select('id');
 
     if (eq != null) {
       for (final e in eq.entries) {
         query = query.eq(e.key, e.value);
       }
     }
-    final res = await query;
+    
+    // On ajoute le count() juste au moment de l'exécution
+    final res = await query.count(CountOption.exact);
     return res.count ?? 0;
   }
 
