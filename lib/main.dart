@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:thix_admin/auth/admin_auth_gate.dart';
 import 'package:thix_admin/core/app_colors.dart';
@@ -48,6 +49,15 @@ Future<void> main() async {
       } catch (e, stack) {
         _logError('SupabaseConfig.initialize', e, stack);
         // On continue : l'AdminAuthGate gèrera l'erreur côté UI
+      }
+
+      // 🌐 CORRECTION : initialisation des locales intl
+      // Indispensable pour DateFormat('...', 'fr_FR') sinon crash runtime
+      try {
+        await initializeDateFormatting('fr_FR', null);
+        _logInfo('✅ Locales intl (fr_FR) initialisées');
+      } catch (e, stack) {
+        _logError('initializeDateFormatting', e, stack);
       }
 
       // 🎨 Lancement de l'application sous ProviderScope (Riverpod)
@@ -284,7 +294,7 @@ class ThixAdminApp extends StatelessWidget {
         columnSpacing: 24,
       ),
 
-      // ── Cards (✅ CORRIGÉ : const retiré) ──
+      // ── Cards (✅ sans const : BorderRadius.circular n'est pas const) ──
       cardTheme: CardTheme(
         elevation: 0,
         color: Colors.white,
@@ -294,7 +304,7 @@ class ThixAdminApp extends StatelessWidget {
         ),
       ),
 
-      // ── Dialogs (✅ CORRIGÉ : const retiré) ──
+      // ── Dialogs (✅ sans const : BorderRadius.circular n'est pas const) ──
       dialogTheme: DialogTheme(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -412,19 +422,7 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
       return widget.fallback ?? _buildErrorFallback();
     }
 
-    // 🔒 On intercepte les erreurs dans le subtree
-    return _ErrorCatcher(
-      onError: (error, stack) {
-        _logError('ErrorBoundary', error, stack);
-        if (mounted) {
-          setState(() {
-            _hasError = true;
-            _error = error;
-          });
-        }
-      },
-      child: widget.child,
-    );
+    return widget.child;
   }
 
   Widget _buildErrorFallback() {
@@ -472,18 +470,5 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
         ),
       ),
     );
-  }
-}
-
-/// Widget interne qui capture les erreurs du subtree via ErrorWidget.builder
-class _ErrorCatcher extends StatelessWidget {
-  final Widget child;
-  final void Function(Object, StackTrace) onError;
-
-  const _ErrorCatcher({required this.child, required this.onError});
-
-  @override
-  Widget build(BuildContext context) {
-    return child;
   }
 }
