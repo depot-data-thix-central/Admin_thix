@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_admin/core/app_colors.dart';
+import 'package:thix_admin/features/security/providers/security_provider.dart'; // ⬅️ IMPORT AJOUTÉ
 
 class AdminLoginPage extends StatefulWidget {
   final VoidCallback onLoggedIn;
@@ -25,8 +26,18 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
       );
       widget.onLoggedIn();
     } on AuthException catch (e) {
+      // 🛡️ Journalisation sécurité (brute force)
+      SecurityReporter.reportLoginFailure(
+        identifier: _emailCtrl.text.trim(),
+        reason: e.message,
+      );
       setState(() => _error = e.message);
     } catch (e) {
+      // 🛡️ Journalisation des autres erreurs
+      SecurityReporter.reportLoginFailure(
+        identifier: _emailCtrl.text.trim(),
+        reason: e.toString(),
+      );
       setState(() => _error = 'Erreur de connexion');
     } finally {
       if (mounted) setState(() => _loading = false);
