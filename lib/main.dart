@@ -269,8 +269,7 @@ class ThixAdminApp extends StatelessWidget {
 
       // ── DataTable (listes d'utilisateurs, articles, etc.) ──
       dataTableTheme: DataTableThemeData(
-        headingRowColor:
-            WidgetStateProperty.all(const Color(0xFFF9FAFB)),
+        headingRowColor: WidgetStateProperty.all(const Color(0xFFF9FAFB)),
         headingTextStyle: const TextStyle(
           fontWeight: FontWeight.w700,
           color: Color(0xFF101840),
@@ -285,8 +284,8 @@ class ThixAdminApp extends StatelessWidget {
         columnSpacing: 24,
       ),
 
-      // ── Cards ──
-      cardTheme: const CardTheme(
+      // ── Cards (✅ CORRIGÉ : const retiré) ──
+      cardTheme: CardTheme(
         elevation: 0,
         color: Colors.white,
         shape: RoundedRectangleBorder(
@@ -295,8 +294,8 @@ class ThixAdminApp extends StatelessWidget {
         ),
       ),
 
-      // ── Dialogs ──
-      dialogTheme: const DialogTheme(
+      // ── Dialogs (✅ CORRIGÉ : const retiré) ──
+      dialogTheme: DialogTheme(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
