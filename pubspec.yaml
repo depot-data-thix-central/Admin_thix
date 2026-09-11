@@ -1,5 +1,5 @@
 name: thix_admin
-description: Panneau d'administration THIX ID (web uniquement)
+description: Panneau d'administration THIX ID - Dashboard Enterprise (web uniquement)
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,13 +9,103 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.5.6
-  flutter_riverpod: ^2.5.1
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🌐 LOCALISATION & INTERNATIONALISATION
+  # ═══════════════════════════════════════════════════════════════
+  flutter_localizations:
+    sdk: flutter
   intl: ^0.19.0
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🏗️ ARCHITECTURE & STATE MANAGEMENT
+  # ═══════════════════════════════════════════════════════════════
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🧭 NAVIGATION
+  # ═══════════════════════════════════════════════════════════════
   go_router: ^14.2.0
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🔥 BACKEND SUPABASE
+  # ═══════════════════════════════════════════════════════════════
+  supabase_flutter: ^2.5.6
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🖼️ UI & AFFICHAGE
+  # ═══════════════════════════════════════════════════════════════
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 📊 DATA & PARSING
+  # ═══════════════════════════════════════════════════════════════
+  html: ^0.15.4
+  collection: ^1.18.0
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🔒 SÉCURITÉ & STOCKAGE
+  # ═══════════════════════════════════════════════════════════════
+  flutter_secure_storage: ^9.2.2
+  crypto: ^3.0.3
+  uuid: ^4.4.2
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🛠️ UTILITAIRES
+  # ═══════════════════════════════════════════════════════════════
+  url_launcher: ^6.3.0
+  shared_preferences: ^2.3.2
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 📈 MONITORING & ERREURS (PRODUCTION)
+  # ═══════════════════════════════════════════════════════════════
+  sentry_flutter: ^8.4.0
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🔍 LINTING & QUALITÉ DU CODE
+  # ═══════════════════════════════════════════════════════════════
   flutter_lints: ^4.0.0
+  very_good_analysis: ^6.0.0
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🧪 TESTS
+  # ═══════════════════════════════════════════════════════════════
+  mocktail: ^1.0.4
+  golden_toolkit: ^0.15.0
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🏗️ GÉNÉRATION DE CODE
+  # ═══════════════════════════════════════════════════════════════
+  build_runner: ^2.4.12
+  riverpod_generator: ^2.4.3
+  json_serializable: ^6.8.0
 
 flutter:
   uses-material-design: true
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 📁 ASSETS
+  # ═══════════════════════════════════════════════════════════════
+  assets:
+    - assets/images/
+    - assets/icons/
+  
+  # ═══════════════════════════════════════════════════════════════
+  # 🔤 POLICES (optionnel - à ajouter si besoin)
+  # ═══════════════════════════════════════════════════════════════
+  # fonts:
+  #   - family: Roboto
+  #     fonts:
+  #       - asset: fonts/Roboto-Regular.ttf
+  #       - asset: fonts/Roboto-Medium.ttf
+  #         weight: 500
+  #       - asset: fonts/Roboto-Bold.ttf
+  #         weight: 700
+  #       - asset: fonts/Roboto-Black.ttf
+  #         weight: 900
