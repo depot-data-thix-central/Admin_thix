@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app_colors.dart';
-import 'package:features/users/models/admin_user_profile.dart';
+import 'package:thix_admin/features/users/models/admin_user_profile.dart';
 import '../providers/users_provider.dart';
 import '../widgets/user_status_badge.dart';
 
