@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:thix_admin/core/app_colors.dart';
 import 'package:thix_admin/features/certifications/pages/admin_enterprise_certifications_page.dart';
 import 'package:thix_admin/features/dashboard/pages/admin_dashboard_page.dart';
-
+import 'package:thix_admin/features/articles/pages/admin_articles_page.dart'; 
 class AdminModule {
   final String title;
   final IconData icon;
@@ -34,6 +34,11 @@ class _AdminShellPageState extends State<AdminShellPage> {
       title: 'Certifications Entreprise',
       icon: Icons.business_center_rounded,
       builder: (_) => const AdminEnterpriseCertificationsPage(),
+    ),
+    AdminModule(
+      title: 'Articles & Annonces',
+      icon: Icons.article_rounded,
+      builder: (_) => const AdminArticlesPage(),
     ),
     // Prochains modules à ajouter ici, ex :
     // AdminModule(title: 'Articles', icon: Icons.article_rounded, builder: (_) => const AdminArticlesPage()),
