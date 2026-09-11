@@ -15,21 +15,35 @@ class UserStatusBadge extends StatelessWidget {
     return Wrap(
       spacing: 6,
       runSpacing: 4,
-      children: [
-        if (showRole && user.isAdmin)
-          _chip('Admin', AppColors.primary, Icons.shield_rounded),
-        if (user.isPendingDeletion)
-          _chip('Suppression', AppColors.danger, Icons.delete_forever_rounded),
-        else if (user.isSuspended)
-          _chip('Suspendu', AppColors.danger, Icons.block_rounded),
-        else
-          _chip('Actif', AppColors.success, Icons.check_circle_rounded),
-        if (user.isCertified)
-          _chip(_tierLabel(), _tierColor(), Icons.verified_rounded),
-        if (user.isEnterprise)
-          _chip('Entreprise', AppColors.enterprise, Icons.business_rounded),
-      ],
+      children: _buildChips(),
     );
+  }
+
+  /// ✅ Construction par méthode : évite les pièges if/else dans les collections
+  List<Widget> _buildChips() {
+    final chips = <Widget>[];
+
+    if (showRole && user.isAdmin) {
+      chips.add(_chip('Admin', AppColors.primary, Icons.shield_rounded));
+    }
+
+    if (user.isPendingDeletion) {
+      chips.add(_chip('Suppression', AppColors.danger, Icons.delete_forever_rounded));
+    } else if (user.isSuspended) {
+      chips.add(_chip('Suspendu', AppColors.danger, Icons.block_rounded));
+    } else {
+      chips.add(_chip('Actif', AppColors.success, Icons.check_circle_rounded));
+    }
+
+    if (user.isCertified) {
+      chips.add(_chip(_tierLabel(), _tierColor(), Icons.verified_rounded));
+    }
+
+    if (user.isEnterprise) {
+      chips.add(_chip('Entreprise', AppColors.enterprise, Icons.business_rounded));
+    }
+
+    return chips;
   }
 
   String _tierLabel() {
@@ -69,7 +83,10 @@ class UserStatusBadge extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-                fontSize: 10.5, fontWeight: FontWeight.w700, color: color),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
         ],
       ),
