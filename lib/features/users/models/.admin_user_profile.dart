@@ -109,7 +109,6 @@ class AdminUserProfile {
     return null;
   }
 
-  // ─── ÉTATS MÉTIER ───
   bool get isAdmin => role == 'admin';
   bool get isSuspended => accountStatus == 'deactivated';
   bool get isPendingDeletion => status == 'pending_deletion';
@@ -120,9 +119,7 @@ class AdminUserProfile {
   String get displayedName =>
       displayName.trim().isNotEmpty ? displayName : (fullName ?? 'Utilisateur');
 
-  /// Contact visible (pas d'email dans profiles → thix_chat / téléphone)
-  String get contactLabel =>
-      thixChat ?? phoneNumber ?? contactPhone ?? '—';
+  String get contactLabel => thixChat ?? phoneNumber ?? contactPhone ?? '—';
 
   String get occupationLabel =>
       (occupation?.trim().isNotEmpty ?? false)
@@ -131,7 +128,6 @@ class AdminUserProfile {
               ? profession!
               : '—';
 
-  // ─── FORMATAGE SÉCURISÉ ───
   String formatDate(DateTime? dt) {
     if (dt == null) return '—';
     try {
@@ -199,7 +195,7 @@ class UsersFilters {
   final String search;
   final String? role;
   final String? accountType;
-  final String? statusGroup; // active | suspended | pending_deletion | admins
+  final String? statusGroup;
 
   const UsersFilters({
     this.search = '',
