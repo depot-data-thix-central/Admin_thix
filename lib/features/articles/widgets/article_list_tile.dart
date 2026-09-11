@@ -169,8 +169,15 @@ class ArticleListTile extends StatelessWidget {
                   ),
                 ]),
               ),
-              const PopupMenuItem(value: 'delete', child: SizedBox.shrink()),
-              // Remplacé ci-dessous par un item rouge custom
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(children: [
+                  const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
+                  const SizedBox(width: 8),
+                  const Text('Supprimer',
+                      style: TextStyle(fontSize: 13, color: AppColors.danger)),
+                ]),
+              ),
             ],
           ),
         ],
