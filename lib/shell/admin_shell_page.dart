@@ -11,7 +11,7 @@ import '../features/audit/pages/admin_audit_page.dart';
 import '../features/security/pages/admin_security_page.dart';
 import '../features/certifications/providers/certifications_provider.dart';
 import '../features/security/providers/security_provider.dart';
-
+import '../features/certifications/models/admin_certification.dart'; 
 /// 🧩 Définition d'un module du shell
 class AdminModule {
   final String title;
