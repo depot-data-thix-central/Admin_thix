@@ -37,7 +37,7 @@ class AdminArticle {
   final DateTime publishedAt;
   final DateTime createdAt;
   final String? createdBy;
-  final Map<String, dynamic> magazineExtras; // ⬅️ NOUVEAU
+  final Map<String, dynamic> magazineExtras;
 
   const AdminArticle({
     required this.id,
@@ -81,6 +81,18 @@ class AdminArticle {
   static DateTime? _dt(Object? v) =>
       v is String ? DateTime.tryParse(v)?.toLocal() : null;
 
+  // ─── GETTERS UTILITAIRES ───
+  bool get isPublished => status == ArticleStatus.published;
+
+  String get formattedDate {
+    const mois = [
+      'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+      'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'
+    ];
+    final d = publishedAt;
+    return '${d.day.toString().padLeft(2, '0')} ${mois[d.month - 1]} ${d.year} à ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
   Map<String, dynamic> toPayload({required bool isInsert, String? authorId}) {
     final map = <String, dynamic>{
       'title': title,
@@ -93,6 +105,7 @@ class AdminArticle {
       'is_breaking': isBreaking,
       'status': status,
       'published_at': publishedAt.toIso8601String(),
+      'is_published': status == ArticleStatus.published,
       'magazine_extras': magazineExtras.isEmpty ? null : magazineExtras,
     };
     if (isInsert) {
