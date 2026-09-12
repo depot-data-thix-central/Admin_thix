@@ -1,4 +1,3 @@
-// lib/features/articles/pages/article_form_page.dart
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +24,14 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
   late final TextEditingController _contentCtrl;
   late final TextEditingController _videoCtrl;
 
+  // ⬇️ Contrôleurs MAGAZINE
+  late final TextEditingController _tagsCtrl;
+  late final TextEditingController _quoteCtrl;
+  late final TextEditingController _keyPointsCtrl;
+  late final TextEditingController _videoDurationCtrl;
+  late final TextEditingController _imageCaptionCtrl;
+  late final TextEditingController _authorRoleCtrl;
+
   late String _category;
   late String _status;
   late bool _isFeatured;
@@ -34,28 +41,6 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
 
   bool get _isEditing => widget.article != null;
 
-  // ─── CONFIGURATION PAR ESPACE ───
-  static const Map<String, Map<String, String>> _spaceHints = {
-    'Magazine': {
-      'label': 'LECTURE PRO',
-      'hint': 'Long format éditorial. Privilégiez un contenu riche (1500+ caractères). La durée de lecture sera calculée automatiquement.',
-      'icon': 'auto_stories',
-    },
-    'Podcast': {
-      'label': 'AUDIO',
-      'hint': 'Épisode audio ou vidéo téléchargeable. Renseignez une URL audio/vidéo ou téléversez un fichier. Les utilisateurs pourront le télécharger pour écoute hors ligne.',
-      'icon': 'headphones',
-    },
-    'Découverte': {
-      'label': 'EXPLORATION',
-      'hint': 'Contenu visuel immersif. Choisissez une image de couverture impactante (format paysage recommandé).',
-      'icon': 'explore',
-    },
-  };
-
-  Map<String, String> get _currentHint =>
-      _spaceHints[_category] ?? {'label': 'GÉNÉRAL', 'hint': '', 'icon': 'article'};
-
   @override
   void initState() {
     super.initState();
@@ -64,6 +49,20 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
     _summaryCtrl = TextEditingController(text: a?.summary ?? '');
     _contentCtrl = TextEditingController(text: a?.content ?? '');
     _videoCtrl = TextEditingController(text: a?.videoUrl ?? '');
+
+    final extras = a?.magazineExtras ?? const <String, dynamic>{};
+    _tagsCtrl = TextEditingController(
+        text: ((extras['tags'] as List?) ?? []).join(', '));
+    _quoteCtrl = TextEditingController(text: extras['pull_quote'] ?? '');
+    _keyPointsCtrl = TextEditingController(
+        text: ((extras['key_points'] as List?) ?? []).join('\n'));
+    _videoDurationCtrl =
+        TextEditingController(text: extras['video_duration'] ?? '');
+    _imageCaptionCtrl =
+        TextEditingController(text: extras['image_caption'] ?? '');
+    _authorRoleCtrl =
+        TextEditingController(text: extras['author_role'] ?? '');
+
     _category = a?.category ?? 'Annonces officielles';
     _status = a?.status ?? ArticleStatus.draft;
     _isFeatured = a?.isFeatured ?? false;
@@ -78,6 +77,12 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
     _summaryCtrl.dispose();
     _contentCtrl.dispose();
     _videoCtrl.dispose();
+    _tagsCtrl.dispose();
+    _quoteCtrl.dispose();
+    _keyPointsCtrl.dispose();
+    _videoDurationCtrl.dispose();
+    _imageCaptionCtrl.dispose();
+    _authorRoleCtrl.dispose();
     super.dispose();
   }
 
@@ -113,11 +118,12 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
     }
   }
 
-  // ─── UPLOAD VIDÉO (NOUVEAU) ───
+  // ─── UPLOAD VIDÉO / AUDIO ───
   Future<void> _pickVideo() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.video,
+        type: FileType.custom,
+        allowedExtensions: ['mp4', 'mp3', 'm4a', 'wav', 'mov', 'webm'],
         withData: true,
         allowMultiple: false,
       );
@@ -128,11 +134,6 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
         _snack('❌ Impossible de lire le fichier', AppColors.danger);
         return;
       }
-      final sizeMB = bytes.length / (1024 * 1024);
-      if (sizeMB > 50) {
-        _snack('⚠️ Fichier trop volumineux (${sizeMB.toStringAsFixed(1)} MB, max 50 MB)',
-            AppColors.warning);
-      }
       final res = await ref.read(articlesProvider.notifier).uploadVideo(
             bytes: bytes,
             fileName: file.name,
@@ -141,7 +142,7 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
       if (!mounted) return;
       if (res.success && res.id != null) {
         setState(() => _videoCtrl.text = res.id!);
-        _snack('✅ Vidéo téléversée (${sizeMB.toStringAsFixed(1)} MB)', AppColors.success);
+        _snack('✅ Média téléversé', AppColors.success);
       } else {
         _snack('❌ ${res.error}', AppColors.danger);
       }
@@ -150,7 +151,7 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
     }
   }
 
-  // ─── DATE DE PUBLICATION ───
+  // ─── DATE ───
   Future<void> _pickDate() async {
     final date = await showDatePicker(
       context: context,
@@ -165,8 +166,8 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
     );
     if (time == null) return;
     setState(() {
-      _publishedAt = DateTime(
-          date.year, date.month, date.day, time.hour, time.minute);
+      _publishedAt =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
     });
   }
 
@@ -174,26 +175,24 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    // Avertissement pour espaces spéciaux
-    if (_category == 'Podcast' && _videoCtrl.text.trim().isEmpty) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Podcast sans média'),
-          content: const Text(
-              'Aucune URL vidéo/audio renseignée. Les utilisateurs ne pourront pas télécharger ce podcast. Continuer ?'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Annuler')),
-            ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Continuer')),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
+    final extras = _category == 'Magazine'
+        ? <String, dynamic>{
+            'tags': _tagsCtrl.text
+                .split(',')
+                .map((t) => t.trim())
+                .where((t) => t.isNotEmpty)
+                .toList(),
+            'pull_quote': _quoteCtrl.text.trim(),
+            'key_points': _keyPointsCtrl.text
+                .split('\n')
+                .map((t) => t.trim())
+                .where((t) => t.isNotEmpty)
+                .toList(),
+            'video_duration': _videoDurationCtrl.text.trim(),
+            'image_caption': _imageCaptionCtrl.text.trim(),
+            'author_role': _authorRoleCtrl.text.trim(),
+          }
+        : const <String, dynamic>{};
 
     final draft = AdminArticle(
       id: widget.article?.id ?? '',
@@ -212,6 +211,7 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
       publishedAt: _publishedAt,
       createdAt: widget.article?.createdAt ?? DateTime.now(),
       createdBy: widget.article?.createdBy,
+      magazineExtras: extras,
     );
 
     final res = await ref.read(articlesProvider.notifier).saveArticle(
@@ -236,40 +236,10 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
         .showSnackBar(SnackBar(content: Text(msg), backgroundColor: bg));
   }
 
-  // ─── COULEUR SELON CATÉGORIE ───
-  Color _categoryColor() {
-    switch (_category) {
-      case 'Magazine':
-        return const Color(0xFFD4AF37);
-      case 'Podcast':
-        return const Color(0xFF6366F1);
-      case 'Découverte':
-        return const Color(0xFF10B981);
-      default:
-        return AppColors.primary;
-    }
-  }
-
-  IconData _categoryIcon() {
-    switch (_category) {
-      case 'Magazine':
-        return Icons.auto_stories_rounded;
-      case 'Podcast':
-        return Icons.headphones_rounded;
-      case 'Découverte':
-        return Icons.explore_rounded;
-      default:
-        return Icons.article_rounded;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(articlesProvider);
     final categories = ref.watch(articlesCategoriesProvider);
-    final hint = _currentHint;
-    final color = _categoryColor();
-    final isSpecialSpace = _spaceHints.containsKey(_category);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
@@ -298,7 +268,6 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            // ── Titre ──
             TextFormField(
               controller: _titleCtrl,
               maxLength: 150,
@@ -308,19 +277,15 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
                   : null,
             ),
             const SizedBox(height: 12),
-
-            // ── Résumé ──
             TextFormField(
               controller: _summaryCtrl,
               maxLength: 300,
               maxLines: 2,
               decoration: const InputDecoration(
-                labelText: 'Résumé (affiché dans les listes)',
+                labelText: 'Résumé / sous-titre (affiché dans le hero)',
               ),
             ),
             const SizedBox(height: 12),
-
-            // ── Catégorie + Statut ──
             Row(
               children: [
                 Expanded(
@@ -349,53 +314,9 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-
-            // ── AIDE CONTEXTUELLE POUR ESPACES SPÉCIAUX ──
-            if (isSpecialSpace)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: color.withOpacity(0.3)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(_categoryIcon(), size: 18, color: color),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Espace ${_category} — ${hint['label']}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: color,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            hint['hint']!,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: Colors.grey.shade700,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             const SizedBox(height: 16),
 
-            // ── Image de couverture ──
+            // ── IMAGE ──
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -406,24 +327,21 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Image de couverture',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                  ),
+                  const Text('Image de couverture (hero)',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13)),
                   const SizedBox(height: 12),
                   if (_imageUrl != null)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        _imageUrl!,
-                        height: 160,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                            Icons.broken_image_outlined,
-                            size: 48,
-                            color: Colors.grey),
-                      ),
+                      child: Image.network(_imageUrl!,
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                              Icons.broken_image_outlined,
+                              size: 48,
+                              color: Colors.grey)),
                     ),
                   const SizedBox(height: 12),
                   Row(
@@ -435,8 +353,7 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
                                 width: 14,
                                 height: 14,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
-                              )
+                                    strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.upload_rounded, size: 16),
                         label: Text(state.isUploading
                             ? 'Envoi…'
@@ -458,27 +375,24 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
             ),
             const SizedBox(height: 16),
 
-            // ── Contenu ──
+            // ── CONTENU ──
             TextFormField(
               controller: _contentCtrl,
               maxLines: _category == 'Magazine' ? 20 : 14,
               decoration: InputDecoration(
-                labelText: _category == 'Magazine'
-                    ? 'Contenu de l\'article * (long format)'
-                    : 'Contenu de l\'article *',
+                labelText: 'Contenu de l\'article *',
                 alignLabelWithHint: true,
                 helperText: _category == 'Magazine'
-                    ? 'Durée de lecture estimée : ~${(_contentCtrl.text.length / 1500).ceil().clamp(1, 99)} min'
+                    ? 'Syntaxe : ## Titre • > Citation • ![légende](url) • @[légende|02:34](url vidéo)'
                     : null,
               ),
               validator: (v) => (v == null || v.trim().length < 20)
                   ? 'Le contenu doit contenir au moins 20 caractères'
                   : null,
-              onChanged: _category == 'Magazine' ? (_) => setState(() {}) : null,
             ),
             const SizedBox(height: 12),
 
-            // ── Vidéo / Audio (adapté à l'espace) ──
+            // ── VIDÉO ──
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -489,75 +403,120 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _category == 'Podcast'
-                            ? Icons.headphones_rounded
-                            : Icons.videocam_rounded,
-                        size: 18,
-                        color: _category == 'Podcast'
-                            ? const Color(0xFF6366F1)
-                            : AppColors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _category == 'Podcast'
-                              ? 'Média audio / vidéo (téléchargeable)'
-                              : 'Vidéo (optionnel)',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
+                  const Text('Vidéo / audio (optionnel)',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13)),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _videoCtrl,
-                    decoration: InputDecoration(
-                      labelText: _category == 'Podcast'
-                          ? 'URL du fichier audio/vidéo *'
-                          : 'URL vidéo (optionnel)',
-                      hintText: _category == 'Podcast'
-                          ? 'https://…mp3 / .mp4'
-                          : 'https://…',
+                    decoration: const InputDecoration(
+                      labelText: 'URL du média',
+                      hintText: 'https://…',
                     ),
-                    validator: _category == 'Podcast'
-                        ? (v) => (v == null || v.trim().isEmpty)
-                            ? 'URL audio/vidéo requise pour un podcast'
-                            : null
-                        : null,
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: state.isUploading ? null : _pickVideo,
-                        icon: state.isUploading
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.cloud_upload_rounded, size: 16),
-                        label: Text(state.isUploading ? 'Envoi…' : 'Téléverser un fichier'),
-                      ),
-                      if (_videoCtrl.text.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: () => setState(() => _videoCtrl.clear()),
-                          child: const Text('Retirer'),
-                        ),
-                      ],
-                    ],
+                  OutlinedButton.icon(
+                    onPressed: state.isUploading ? null : _pickVideo,
+                    icon: state.isUploading
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.cloud_upload_rounded, size: 16),
+                    label: Text(
+                        state.isUploading ? 'Envoi…' : 'Téléverser un fichier'),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // ── Options éditoriales ──
+            // ═══ SECTION MAGAZINE PREMIUM ═══
+            if (_category == 'Magazine')
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD4AF37).withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: const Color(0xFFD4AF37).withOpacity(0.35)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_stories_rounded,
+                            size: 18, color: Color(0xFFB8960C)),
+                        SizedBox(width: 8),
+                        Text('Magazine — options premium',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFB8960C))),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _tagsCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Tags (séparés par des virgules)',
+                        hintText: 'Innovation, Afrique',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _quoteCtrl,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Citation mise en avant',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _keyPointsCtrl,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Points clés « À retenir » (1 par ligne)',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _videoDurationCtrl,
+                            decoration: const InputDecoration(
+                                labelText: 'Durée vidéo', hintText: '02:34'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _imageCaptionCtrl,
+                            decoration: const InputDecoration(
+                                labelText: 'Légende image',
+                                hintText: 'Kinshasa, RDC'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _authorRoleCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Fonction de l\'auteur',
+                        hintText: 'Entrepreneur • Analyste',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── OPTIONS ──
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -573,8 +532,6 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
                     title: const Text('À la une',
                         style: TextStyle(
                             fontSize: 13.5, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Affiché en priorité sur l\'accueil',
-                        style: TextStyle(fontSize: 11.5)),
                     contentPadding: EdgeInsets.zero,
                   ),
                   SwitchListTile(
@@ -583,8 +540,6 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
                     title: const Text('Breaking news',
                         style: TextStyle(
                             fontSize: 13.5, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Alerte urgente mise en avant',
-                        style: TextStyle(fontSize: 11.5)),
                     contentPadding: EdgeInsets.zero,
                   ),
                   const Divider(height: 24),
@@ -609,14 +564,14 @@ class _ArticleFormPageState extends ConsumerState<ArticleFormPage> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // ── Bouton principal ──
             SizedBox(
               height: 50,
               child: ElevatedButton(
                 onPressed: state.isSaving ? null : _save,
                 child: Text(
-                  _isEditing ? 'Enregistrer les modifications' : 'Publier l\'article',
+                  _isEditing
+                      ? 'Enregistrer les modifications'
+                      : 'Publier l\'article',
                   style: const TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w700),
                 ),
