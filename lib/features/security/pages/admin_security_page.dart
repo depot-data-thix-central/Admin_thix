@@ -31,6 +31,13 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
       const Duration(seconds: 60),
       (_) => ref.read(securityProvider.notifier).refresh(silent: true),
     );
+    String _fmtDate(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$d/$m à $h:$min';
+  }
   }
 
   @override
