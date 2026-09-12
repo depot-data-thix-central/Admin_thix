@@ -31,21 +31,27 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
       const Duration(seconds: 60),
       (_) => ref.read(securityProvider.notifier).refresh(silent: true),
     );
-    String _fmtDate(DateTime dt) {
+  }
+
+  // _fmtDate est maintenant une méthode de la classe, accessible partout dans _AdminSecurityPageState
+  String _fmtDate(DateTime dt) {
     final d = dt.day.toString().padLeft(2, '0');
     final m = dt.month.toString().padLeft(2, '0');
     final h = dt.hour.toString().padLeft(2, '0');
     final min = dt.minute.toString().padLeft(2, '0');
     return '$d/$m à $h:$min';
   }
-  }
 
   @override
   void dispose() {
-    _autoRefresh?.cancel();
     _tabCtrl.dispose();
+    _autoRefresh?.cancel();
     super.dispose();
   }
+
+
+}
+
 
   void _snack(String msg, Color bg) {
     if (!mounted) return;
