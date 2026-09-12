@@ -35,8 +35,9 @@ class _AdminCertificationsPageState
 
   void _snack(String msg, bool ok) {
     if (!mounted) return;
+    final err = ref.read(certificationsProvider).lastActionError;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(msg),
+        content: Text(ok ? msg : (err ?? 'Échec de l\'opération')),
         backgroundColor: ok ? AppColors.success : AppColors.danger));
   }
 
