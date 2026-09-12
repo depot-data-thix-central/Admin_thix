@@ -7,8 +7,8 @@ import '../../../core/app_colors.dart';
 import '../models/security_event.dart';
 import '../providers/security_provider.dart';
 import '../widgets/app_signals_panel.dart';
-import '../services/error_analyzer.dart';     // ⬅️ AJOUT
-import 'error_detail_page.dart';              // ⬅️ AJOUT
+import '../services/error_analyzer.dart';     
+import 'error_detail_page.dart';              
 
 /// 🛡️ Page monitoring sécurité + ACTIONS
 class AdminSecurityPage extends ConsumerStatefulWidget {
@@ -48,10 +48,6 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
     _autoRefresh?.cancel();
     super.dispose();
   }
-
-
-}
-
 
   void _snack(String msg, Color bg) {
     if (!mounted) return;
@@ -971,6 +967,6 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
         ),
       ),
     );
-  }
+  
 }
 }
