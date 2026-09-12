@@ -6,7 +6,7 @@ import '../../../supabase/supabase_config.dart';
 import '../../security/providers/security_provider.dart';
 import '../models/admin_certification.dart';
 
-/// 📦 État du module (renommé pour éviter le conflit avec l'enum CertState)
+/// 📦 État du module
 @immutable
 class CertificationsState {
   final List<AdminCertification> items;
@@ -15,6 +15,7 @@ class CertificationsState {
   final String search;
   final String? tierFilter;
   final bool isActing;
+  final String? lastActionError; // ⬅️ AJOUT : message d'erreur action précis
 
   const CertificationsState({
     this.items = const [],
@@ -23,6 +24,7 @@ class CertificationsState {
     this.search = '',
     this.tierFilter,
     this.isActing = false,
+    this.lastActionError, // ⬅️ AJOUT
   });
 
   CertificationsState copyWith({
@@ -34,6 +36,8 @@ class CertificationsState {
     String? tierFilter,
     bool clearTier = false,
     bool? isActing,
+    String? lastActionError, // ⬅️ AJOUT
+    bool clearActionError = false, // ⬅️ AJOUT
   }) {
     return CertificationsState(
       items: items ?? this.items,
@@ -42,6 +46,9 @@ class CertificationsState {
       search: search ?? this.search,
       tierFilter: clearTier ? null : (tierFilter ?? this.tierFilter),
       isActing: isActing ?? this.isActing,
+      lastActionError: clearActionError
+          ? null
+          : (lastActionError ?? this.lastActionError), // ⬅️ AJOUT
     );
   }
 }
@@ -131,21 +138,37 @@ class CertificationsNotifier extends StateNotifier<CertificationsState> {
   int countOf(CertStateFilter f) => byState(f).length;
 
   // ═══════════════════════════════════════════════════════════════
-  // ⚡ ACTIONS
+  // ⚡ ACTIONS (avec détection des updates silencieux RLS)
   // ═══════════════════════════════════════════════════════════════
 
   Future<bool> _update(String userId, Map<String, dynamic> payload,
       String actionLabel) async {
     if (state.isActing) return false;
-    state = state.copyWith(isActing: true);
+    state = state.copyWith(isActing: true, clearActionError: true);
     try {
-      await SupabaseConfig.client.from(kTable).update(payload).eq('id', userId);
+      // ✅ .select() renvoie les lignes MODIFIÉES : vide = bloqué par RLS
+      final res = await SupabaseConfig.client
+          .from(kTable)
+          .update(payload)
+          .eq('id', userId)
+          .select();
+
+      if ((res as List).isEmpty) {
+        state = state.copyWith(
+          isActing: false,
+          lastActionError:
+              '⛔ Modification bloquée : le compte connecté n\'a pas le rôle admin (RLS)',
+        );
+        return false;
+      }
+
       SecurityReporter.reportAdminAction(action: actionLabel, targetId: userId);
       state = state.copyWith(isActing: false);
       await load();
       return true;
     } catch (e) {
-      state = state.copyWith(isActing: false);
+      state = state.copyWith(
+          isActing: false, lastActionError: 'Erreur : $e');
       return false;
     }
   }
