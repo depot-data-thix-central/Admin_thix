@@ -12,6 +12,8 @@ import '../features/security/pages/admin_security_page.dart';
 import '../features/certifications/providers/certifications_provider.dart';
 import '../features/security/providers/security_provider.dart';
 import '../features/certifications/models/admin_certification.dart'; 
+import 'package:thix_admin/features/moderation/pages/admin_moderation_page.dart';
+
 /// 🧩 Définition d'un module du shell
 class AdminModule {
   final String title;
@@ -67,6 +69,11 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
       title: 'Sécurité',
       icon: Icons.shield_rounded,
       builder: (_) => AdminSecurityPage(),
+    ),
+    AdminModule(
+      title: 'Modération',
+      icon: Icons.flag_rounded,
+      builder: (_) => const AdminModerationPage(),
     ),
   ];
 
