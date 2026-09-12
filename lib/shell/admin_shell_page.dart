@@ -6,7 +6,7 @@ import 'package:thix_admin/features/dashboard/pages/admin_dashboard_page.dart';
 import 'package:thix_admin/features/articles/pages/admin_articles_page.dart'; 
 import 'package:thix_admin/features/users/pages/admin_users_page.dart';
 import 'package:thix_admin/features/security/pages/admin_security_page.dart';
-
+import 'package:thix_admin/features/audit/pages/admin_audit_page.dart';
 
 class AdminModule {
   final String title;
@@ -48,6 +48,11 @@ class _AdminShellPageState extends State<AdminShellPage> {
       title: 'Articles & Annonces',
       icon: Icons.article_rounded,
       builder: (_) => const AdminArticlesPage(),
+    ),
+    AdminModule(
+      title: 'Journal d\'audit',
+      icon: Icons.receipt_long_rounded,
+      builder: (_) => const AdminAuditPage(),
     ),
     AdminModule(
       title: 'Sécurité',
