@@ -92,8 +92,8 @@ class ErrorDetailPage extends StatelessWidget {
             ),
             child: SelectableText(
               error.message,
-              style: const TextStyle(
-                color: Colors.white87,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.87),
                 fontSize: 12,
                 fontFamily: 'monospace',
                 height: 1.5,
