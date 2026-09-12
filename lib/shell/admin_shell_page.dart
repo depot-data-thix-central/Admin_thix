@@ -37,7 +37,7 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
   int _index = 0;
 
   /// 📚 Les 6 modules de l'admin
-  static const List<AdminModule> _modules = [
+  static final List<AdminModule> _modules = [
     AdminModule(
       title: 'Dashboard',
       icon: Icons.dashboard_rounded,
