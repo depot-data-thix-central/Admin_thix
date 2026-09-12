@@ -210,7 +210,8 @@ class _AdminCertificationsPageState
                 : TabBarView(
                     controller: _tab,
                     children: [
-                      for (final f in _tabs) _buildList(notifier.byState(f), notifier),
+                      for (final f in _tabs)
+                        _buildList(notifier.byState(f), notifier),
                     ],
                   ),
           ),
@@ -219,7 +220,8 @@ class _AdminCertificationsPageState
     );
   }
 
-  Widget _buildList(List<AdminCertification> items, CertificationsNotifier n) {
+  Widget _buildList(
+      List<AdminCertification> items, CertificationsNotifier n) {
     if (items.isEmpty) {
       return Center(
         child: Text('Aucune certification dans cette catégorie',
@@ -250,9 +252,8 @@ class _AdminCertificationsPageState
               CircleAvatar(
                 radius: 22,
                 backgroundColor: const Color(0xFFF3F4F6),
-                backgroundImage: c.avatarUrl != null
-                    ? NetworkImage(c.avatarUrl!)
-                    : null,
+                backgroundImage:
+                    c.avatarUrl != null ? NetworkImage(c.avatarUrl!) : null,
                 child: c.avatarUrl == null
                     ? Text(c.displayName.isNotEmpty
                         ? c.displayName[0].toUpperCase()
@@ -268,20 +269,19 @@ class _AdminCertificationsPageState
                         style: const TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
-                    Text('${c.thixId} • ${c.accountType == 'enterprise' ? 'Entreprise' : 'Particulier'}',
+                    Text(
+                        '${c.thixId} • ${c.accountType == 'enterprise' ? 'Entreprise' : 'Particulier'}',
                         style: TextStyle(
                             fontSize: 11, color: Colors.grey.shade600)),
                   ],
                 ),
               ),
-              _badge(c.tier, CertTier.color(c.tier)),
+              _badge(CertTier.label(c.tier), CertTier.color(c.tier)),
               const SizedBox(width: 6),
               _badge(c.stateLabel, c.stateColor),
             ],
           ),
           const Divider(height: 20),
-
-          // ── Dates & infos ──
           Wrap(
             spacing: 16,
             runSpacing: 6,
@@ -290,7 +290,9 @@ class _AdminCertificationsPageState
               _info('Expiration', c.fmt(c.expiresAt)),
               if (c.expiresAt != null && !c.isExpired)
                 _info('Jours restants', '${c.daysLeft} j',
-                    color: c.daysLeft <= 30 ? AppColors.warning : AppColors.success),
+                    color: c.daysLeft <= 30
+                        ? AppColors.warning
+                        : AppColors.success),
               if (c.isSuspended)
                 _info(
                     'Suspension',
@@ -305,16 +307,10 @@ class _AdminCertificationsPageState
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text('Motif : ${c.suspensionReason}',
-                  style: TextStyle(fontSize: 11, color: AppColors.danger)),
+                  style: const TextStyle(fontSize: 11, color: AppColors.danger)),
             ),
           const SizedBox(height: 10),
-
-          // ── ACTIONS ──
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _actions(c, n),
-          ),
+          Wrap(spacing: 8, runSpacing: 8, children: _actions(c, n)),
         ],
       ),
     );
@@ -338,10 +334,10 @@ class _AdminCertificationsPageState
     }
 
     if (c.state == CertState.active || c.state == CertState.expiring) {
-      acts.add(_btn('⏸️ Suspendre', AppColors.warning,
-          () => _suspendDialog(c, n)));
-      acts.add(_btn('⏱️ Prolonger', AppColors.info,
-          () => _extendDialog(c, n)));
+      acts.add(
+          _btn('⏸️ Suspendre', AppColors.warning, () => _suspendDialog(c, n)));
+      acts.add(
+          _btn('⏱️ Prolonger', AppColors.info, () => _extendDialog(c, n)));
       acts.add(_btn('🗑️ Révoquer', AppColors.danger,
           () => _reasonDialog(c, n, 'Révoquer la certification', n.revoke)));
     }
@@ -354,7 +350,9 @@ class _AdminCertificationsPageState
           () => _reasonDialog(c, n, 'Révoquer la certification', n.revoke)));
     }
 
-    if (acts.add(_btn('🔄 Renouveler', AppColors.primary,
+    if (c.state == CertState.expired) {
+      // ✅ CORRECTION : parenthèses correctement fermées
+      acts.add(_btn('🔄 Renouveler', AppColors.primary,
           () => _approveDialog(c, n, renew: true)));
       acts.add(_btn('🗑️ Révoquer', AppColors.danger,
           () => _reasonDialog(c, n, 'Révoquer la certification', n.revoke)));
@@ -393,7 +391,8 @@ class _AdminCertificationsPageState
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(label,
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: color)),
+          style:
+              TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: color)),
     );
   }
 
@@ -450,7 +449,7 @@ class _AdminCertificationsPageState
                   style: const TextStyle(fontSize: 13)),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
-                initialValue: months,
+                value: months, // ✅ CORRECTION (Flutter 3.24)
                 decoration: const InputDecoration(labelText: 'Durée'),
                 items: const [
                   DropdownMenuItem(value: 1, child: Text('1 mois')),
@@ -482,7 +481,7 @@ class _AdminCertificationsPageState
 
   Future<void> _suspendDialog(
       AdminCertification c, CertificationsNotifier n) async {
-    int? days = 30;
+    int days = 30;
     final reasonCtrl = TextEditingController();
     await showDialog(
       context: context,
@@ -496,16 +495,16 @@ class _AdminCertificationsPageState
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
-              DropdownButtonFormField<int?>(
-                initialValue: days,
+              DropdownButtonFormField<int>(
+                value: days, // ✅ CORRECTION (Flutter 3.24)
                 decoration: const InputDecoration(labelText: 'Durée'),
                 items: const [
                   DropdownMenuItem(value: 7, child: Text('7 jours')),
                   DropdownMenuItem(value: 30, child: Text('30 jours')),
                   DropdownMenuItem(value: 90, child: Text('90 jours')),
-                  DropdownMenuItem(value: null, child: Text('Définitive')),
+                  DropdownMenuItem(value: -1, child: Text('Définitive')),
                 ],
-                onChanged: (v) => setSt(() => days = v),
+                onChanged: (v) => setSt(() => days = v!),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -526,7 +525,7 @@ class _AdminCertificationsPageState
                 Navigator.pop(ctx);
                 _snack(
                     'Certification suspendue',
-                    await n.suspend(c.userId, days,
+                    await n.suspend(c.userId, days == -1 ? null : days,
                         reasonCtrl.text.trim()));
               },
               child: const Text('Suspendre'),
@@ -546,7 +545,7 @@ class _AdminCertificationsPageState
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('⏱️ Prolonger'),
           content: DropdownButtonFormField<int>(
-            initialValue: days,
+            value: days, // ✅ CORRECTION (Flutter 3.24)
             items: const [
               DropdownMenuItem(value: 30, child: Text('+30 jours')),
               DropdownMenuItem(value: 90, child: Text('+90 jours')),
@@ -563,7 +562,8 @@ class _AdminCertificationsPageState
               onPressed: () async {
                 Navigator.pop(ctx);
                 _snack('Certification prolongée',
-                    await n.extend(c.userId, c.expiresAt ?? DateTime.now(), days));
+                    await n.extend(
+                        c.userId, c.expiresAt ?? DateTime.now(), days));
               },
               child: const Text('Prolonger'),
             ),
