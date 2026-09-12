@@ -7,6 +7,8 @@ import '../../../core/app_colors.dart';
 import '../models/security_event.dart';
 import '../providers/security_provider.dart';
 import '../widgets/app_signals_panel.dart';
+import '../services/error_analyzer.dart';     // ⬅️ AJOUT
+import 'error_detail_page.dart';              // ⬅️ AJOUT
 
 /// 🛡️ Page monitoring sécurité + ACTIONS
 class AdminSecurityPage extends ConsumerStatefulWidget {
@@ -157,8 +159,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
 
   Widget _dot(int n) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration:
-            BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(
+            color: AppColors.danger, borderRadius: BorderRadius.circular(10)),
         child: Text('$n',
             style: const TextStyle(
                 color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
@@ -185,7 +187,9 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
           children: [
             _statCard('Échecs login 24 h', '${notifier.loginFailed24h}',
                 Icons.lock_outline_rounded,
-                notifier.loginFailed24h >= 5 ? AppColors.danger : AppColors.warning),
+                notifier.loginFailed24h >= 5
+                    ? AppColors.danger
+                    : AppColors.warning),
             _statCard('Erreurs app 24 h', '${notifier.clientErrors24h}',
                 Icons.bug_report_outlined, AppColors.info),
             _statCard('Critiques 7 j', '${notifier.critical7d}',
@@ -193,7 +197,9 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                 notifier.critical7d > 0 ? AppColors.danger : AppColors.success),
             _statCard('Blocages actifs', '${state.blocklist.length}',
                 Icons.block_rounded,
-                state.blocklist.isNotEmpty ? AppColors.danger : AppColors.success),
+                state.blocklist.isNotEmpty
+                    ? AppColors.danger
+                    : AppColors.success),
           ],
         ),
         const SizedBox(height: 20),
@@ -273,13 +279,15 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
               FilterChip(
                 selected: state.filterSource == null,
                 onSelected: (_) => notifier.setSourceFilter(null),
-                label: const Text('Toutes sources', style: TextStyle(fontSize: 12)),
+                label: const Text('Toutes sources',
+                    style: TextStyle(fontSize: 12)),
               ),
               FilterChip(
                 selected: state.filterSource == 'mobile_app',
                 onSelected: (_) => notifier.setSourceFilter('mobile_app'),
                 avatar: const Icon(Icons.phone_android_rounded, size: 14),
-                label: const Text('Application', style: TextStyle(fontSize: 12)),
+                label: const Text('Application',
+                    style: TextStyle(fontSize: 12)),
               ),
               FilterChip(
                 selected: state.filterSource == 'admin_web',
@@ -291,7 +299,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                 selected: state.hideHandled,
                 onSelected: notifier.setHideHandled,
                 avatar: const Icon(Icons.visibility_off_outlined, size: 14),
-                label: const Text('Masquer traités', style: TextStyle(fontSize: 12)),
+                label: const Text('Masquer traités',
+                    style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
@@ -390,14 +399,16 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                             color: Color(0xFF101840))),
                     const SizedBox(height: 3),
                     Text(t.description,
-                        style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700)),
+                        style: TextStyle(
+                            fontSize: 11.5, color: Colors.grey.shade700)),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration:
-                    BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    color: color, borderRadius: BorderRadius.circular(10)),
                 child: Text('${t.attempts}x',
                     style: const TextStyle(
                         color: Colors.white,
@@ -407,7 +418,6 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
             ],
           ),
           const Divider(height: 20),
-          // ── BOUTONS D'ACTION ──
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -436,12 +446,16 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                       type: 'identifier',
                       value: t.identifier,
                       reason: 'Brute force : ${t.attempts} tentatives');
-                  _snack(r.success ? '⛔ Bloqué définitivement' : '❌ ${r.error}',
+                  _snack(
+                      r.success
+                          ? '⛔ Bloqué définitivement'
+                          : '❌ ${r.error}',
                       r.success ? AppColors.success : AppColors.danger);
                 }),
               ] else
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.success.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(8),
@@ -461,7 +475,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                   ),
                 ),
               if (t.userId != null)
-                _actionBtn('👤 Suspendre le compte', AppColors.danger, () async {
+                _actionBtn('👤 Suspendre le compte', AppColors.danger,
+                    () async {
                   final r = await notifier.suspendUser(t.userId!);
                   _snack(r.success ? '✅ Compte suspendu' : '❌ ${r.error}',
                       r.success ? AppColors.success : AppColors.danger);
@@ -496,8 +511,10 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
               color: AppColors.danger.withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(isIp ? Icons.wifi_off_rounded : Icons.person_off_rounded,
-                size: 20, color: AppColors.danger),
+            child: Icon(
+                isIp ? Icons.wifi_off_rounded : Icons.person_off_rounded,
+                size: 20,
+                color: AppColors.danger),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -511,13 +528,16 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                         color: Color(0xFF101840))),
                 const SizedBox(height: 2),
                 Text(b.reason.isEmpty ? 'Blocage manuel' : b.reason,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                    style:
+                        TextStyle(fontSize: 11, color: Colors.grey.shade600)),
                 const SizedBox(height: 2),
                 Text(b.expiryLabel,
                     style: TextStyle(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
-                        color: b.isPermanent ? AppColors.danger : AppColors.warning)),
+                        color: b.isPermanent
+                            ? AppColors.danger
+                            : AppColors.warning)),
               ],
             ),
           ),
@@ -537,7 +557,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
             itemBuilder: (_) => const [
               PopupMenuItem(
                   value: 'extend',
-                  child: Text('Prolonger +7 jours', style: TextStyle(fontSize: 13))),
+                  child: Text('Prolonger +7 jours',
+                      style: TextStyle(fontSize: 13))),
               PopupMenuItem(
                   value: 'unblock',
                   child: Text('Débloquer',
@@ -558,7 +579,9 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
         color: e.isHandled ? const Color(0xFFFAFAFA) : Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: e.isHandled ? const Color(0xFFEEEEEE) : const Color(0xFFE5E7EB)),
+            color: e.isHandled
+                ? const Color(0xFFEEEEEE)
+                : const Color(0xFFE5E7EB)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -570,7 +593,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
               color: color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(SecurityEventType.icon(e.eventType), size: 16, color: color),
+            child: Icon(SecurityEventType.icon(e.eventType),
+                size: 16, color: color),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -586,7 +610,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                     ),
                     if (e.isHandled)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(8),
@@ -599,9 +624,11 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                       )
                     else
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                            color: color, borderRadius: BorderRadius.circular(8)),
+                            color: color,
+                            borderRadius: BorderRadius.circular(8)),
                         child: Text(SecuritySeverity.label(e.severity),
                             style: const TextStyle(
                                 color: Colors.white,
@@ -612,7 +639,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
                 ),
                 const SizedBox(height: 3),
                 Text(e.message,
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                    style: TextStyle(
+                        fontSize: 11.5, color: Colors.grey.shade700),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 3),
@@ -638,7 +666,14 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
               if (!e.isHandled)
                 const PopupMenuItem(
                     value: 'ack',
-                    child: Text('✅ Marquer traité', style: TextStyle(fontSize: 13))),
+                    child: Text('✅ Marquer traité',
+                        style: TextStyle(fontSize: 13))),
+              // ⬇️ AJOUT : analyse d'erreur
+              if (e.eventType == SecurityEventType.clientError)
+                const PopupMenuItem(
+                    value: 'analyze',
+                    child: Text('🔬 Voir l\'analyse détaillée',
+                        style: TextStyle(fontSize: 13))),
               if (e.identifier != null)
                 const PopupMenuItem(
                     value: 'block_id',
@@ -647,12 +682,14 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
               if (e.ipAddress != null)
                 const PopupMenuItem(
                     value: 'block_ip',
-                    child: Text('⛔ Bloquer l\'IP', style: TextStyle(fontSize: 13))),
+                    child: Text('⛔ Bloquer l\'IP',
+                        style: TextStyle(fontSize: 13))),
               if (e.userId != null)
                 const PopupMenuItem(
                     value: 'suspend',
                     child: Text('👤 Suspendre le compte',
-                        style: TextStyle(fontSize: 13, color: AppColors.danger))),
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.danger))),
             ],
           ),
         ],
@@ -662,35 +699,47 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
 
   Future<void> _handleEventAction(
       String action, SecurityEvent e, SecurityNotifier notifier) async {
-    UserOpResult r;
     switch (action) {
+      // ⬇️ AJOUT : case analyse d'erreur
+      case 'analyze':
+        final agg = AggregatedError(
+          message: e.message.length > 90
+              ? e.message.substring(0, 90)
+              : e.message,
+          count: 1,
+          lastOccurrence: e.createdAt,
+        );
+        Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) =>
+                ErrorDetailPage(error: agg, occurrences: [e])));
+        return;
       case 'ack':
-        r = await notifier.acknowledgeEvents([e.id]);
-        _snack(r.success ? '✅ Événement traité' : '❌ ${r.error}',
-            r.success ? AppColors.success : AppColors.danger);
+        final r1 = await notifier.acknowledgeEvents([e.id]);
+        _snack(r1.success ? '✅ Événement traité' : '❌ ${r1.error}',
+            r1.success ? AppColors.success : AppColors.danger);
         break;
       case 'block_id':
-        r = await notifier.blockValue(
+        final r2 = await notifier.blockValue(
             type: 'identifier',
             value: e.identifier!,
             reason: e.message,
             duration: const Duration(days: 7));
-        _snack(r.success ? '⛔ Identifiant bloqué 7 j' : '❌ ${r.error}',
-            r.success ? AppColors.success : AppColors.danger);
+        _snack(r2.success ? '⛔ Identifiant bloqué 7 j' : '❌ ${r2.error}',
+            r2.success ? AppColors.success : AppColors.danger);
         break;
       case 'block_ip':
-        r = await notifier.blockValue(
+        final r3 = await notifier.blockValue(
             type: 'ip',
             value: e.ipAddress!,
             reason: e.message,
             duration: const Duration(days: 7));
-        _snack(r.success ? '⛔ IP bloquée 7 j' : '❌ ${r.error}',
-            r.success ? AppColors.success : AppColors.danger);
+        _snack(r3.success ? '⛔ IP bloquée 7 j' : '❌ ${r3.error}',
+            r3.success ? AppColors.success : AppColors.danger);
         break;
       case 'suspend':
-        r = await notifier.suspendUser(e.userId!);
-        _snack(r.success ? '✅ Compte suspendu' : '❌ ${r.error}',
-            r.success ? AppColors.success : AppColors.danger);
+        final r4 = await notifier.suspendUser(e.userId!);
+        _snack(r4.success ? '✅ Compte suspendu' : '❌ ${r4.error}',
+            r4.success ? AppColors.success : AppColors.danger);
         break;
     }
   }
@@ -705,14 +754,18 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           child: Text(label,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: color)),
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: color)),
         ),
       ),
     );
   }
 
   Widget _sectionTitle(String label, Color color) => Text(label,
-      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color));
+      style:
+          TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color));
 
   Widget _statCard(String label, String value, IconData icon, Color color) {
     return Container(
@@ -736,7 +789,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
             child: Icon(icon, size: 18, color: color),
           ),
           Text(value,
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color)),
+              style: TextStyle(
+                  fontSize: 26, fontWeight: FontWeight.w900, color: color)),
           Text(label,
               style: TextStyle(
                   fontSize: 11.5,
@@ -749,32 +803,122 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
     );
   }
 
+  // ═══════════════ 🐛 ERREUR CLIQUABLE AVEC ANALYSEUR ═══════════════
   Widget _errorTile(AggregatedError e) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    final insight = ErrorAnalyzer.analyze(e.message);
+    final color = ErrorAnalyzer.color(insight.category);
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.bug_report_outlined, size: 16, color: AppColors.info),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(e.message,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
+        onTap: () => _openErrorAnalysis(e),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
           ),
-          Text('${e.count}x',
-              style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.info)),
-        ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(ErrorAnalyzer.icon(insight.category),
+                    size: 16, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(e.message,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'monospace'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.info.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text('${e.count}x',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.info)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        _miniBadge(
+                            ErrorAnalyzer.label(insight.category), color),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                              'Dernière : ${_fmtDate(e.lastOccurrence)} • toucher pour l\'analyse',
+                              style: TextStyle(
+                                  fontSize: 10, color: Colors.grey.shade500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: Colors.grey),
+            ],
+          ),
+        ),
       ),
     );
+  }
+
+  Widget _miniBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 9.5, fontWeight: FontWeight.w800, color: color)),
+    );
+  }
+
+  void _openErrorAnalysis(AggregatedError e) {
+    final occurrences = ref
+        .read(securityProvider)
+        .events
+        .where((ev) => ev.eventType == SecurityEventType.clientError)
+        .where((ev) =>
+            (ev.message.length > 90
+                    ? ev.message.substring(0, 90)
+                    : ev.message) ==
+            e.message)
+        .toList();
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            ErrorDetailPage(error: e, occurrences: occurrences)));
   }
 
   Widget _emptyBox(String msg) {
@@ -786,7 +930,8 @@ class _AdminSecurityPageState extends ConsumerState<AdminSecurityPage>
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Center(
-          child: Text(msg, style: TextStyle(fontSize: 13, color: Colors.grey.shade600))),
+          child: Text(msg,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600))),
     );
   }
 
