@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -104,9 +106,9 @@ class ArticlesNotifier extends StateNotifier<ArticlesState> {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // ⚙️ CONFIGURATION — 1 SEULE LIGNE À CHANGER SI BESOIN
+  // ⚙️ CONFIGURATION
   // ═══════════════════════════════════════════════════════════════
-  static const String kTable = 'news_articles'; // ou 'articles' / 'news'
+  static const String kTable = 'news_articles';
   static const String kBucket = 'news_images';
   static const int kPageSize = 20;
 
@@ -187,10 +189,16 @@ class ArticlesNotifier extends StateNotifier<ArticlesState> {
       final authorId = SupabaseConfig.currentUser?.id;
       final isInsert = existingId == null || existingId.isEmpty;
 
+      // ⬇️ Payload enrichi avec is_published (alignement PROD)
+      final payload = <String, dynamic>{
+        ...draft.toPayload(isInsert: isInsert, authorId: authorId),
+        'is_published': draft.status == ArticleStatus.published,
+      };
+
       if (isInsert) {
         final res = await SupabaseConfig.client
             .from(kTable)
-            .insert(draft.toPayload(isInsert: true, authorId: authorId))
+            .insert(payload)
             .select();
         final id = (res as List).first['id'].toString();
         state = state.copyWith(isSaving: false);
@@ -199,7 +207,7 @@ class ArticlesNotifier extends StateNotifier<ArticlesState> {
       } else {
         await SupabaseConfig.client
             .from(kTable)
-            .update(draft.toPayload(isInsert: false))
+            .update(payload)
             .eq('id', existingId);
         state = state.copyWith(isSaving: false);
         await loadArticles(refresh: true);
@@ -237,7 +245,11 @@ class ArticlesNotifier extends StateNotifier<ArticlesState> {
       final payload = <String, dynamic>{};
       if (isFeatured != null) payload['is_featured'] = isFeatured;
       if (isBreaking != null) payload['is_breaking'] = isBreaking;
-      if (status != null) payload['status'] = status;
+      if (status != null) {
+        payload['status'] = status;
+        // ⬇️ AJOUT : synchroniser is_published avec le statut
+        payload['is_published'] = status == ArticleStatus.published;
+      }
       if (payload.isEmpty) return ArticleOpResult.ok();
 
       await SupabaseConfig.client.from(kTable).update(payload).eq('id', id);
@@ -270,19 +282,18 @@ class ArticlesNotifier extends StateNotifier<ArticlesState> {
 
     try {
       final ext = (extension ?? 'jpg').toLowerCase();
-      final contentType = _mime(ext);
+      final contentType = _mimeImage(ext);
       final path =
           'articles/${DateTime.now().millisecondsSinceEpoch}_$fileName';
 
-      await SupabaseConfig.client.storage
-          .from(kBucket)
-          .uploadBinary(
+      await SupabaseConfig.client.storage.from(kBucket).uploadBinary(
             path,
             bytes,
             fileOptions: FileOptions(contentType: contentType, upsert: false),
           );
 
-      final url = SupabaseConfig.client.storage.from(kBucket).getPublicUrl(path);
+      final url =
+          SupabaseConfig.client.storage.from(kBucket).getPublicUrl(path);
       state = state.copyWith(isUploading: false);
       return ArticleOpResult.ok(url);
     } catch (e, stack) {
@@ -292,7 +303,47 @@ class ArticlesNotifier extends StateNotifier<ArticlesState> {
     }
   }
 
-  String _mime(String ext) {
+  // ─── UPLOAD VIDÉO / AUDIO (NOUVEAU) ───
+  Future<ArticleOpResult> uploadVideo({
+    required Uint8List bytes,
+    required String fileName,
+    String? extension,
+  }) async {
+    if (state.isUploading) return ArticleOpResult.fail('Upload en cours…');
+
+    // Vérification taille (max 100 MB pour les podcasts/vidéos)
+    final sizeMB = bytes.length / (1024 * 1024);
+    if (sizeMB > 100) {
+      return ArticleOpResult.fail(
+          'Fichier trop volumineux (${sizeMB.toStringAsFixed(1)} MB, max 100 MB)');
+    }
+
+    state = state.copyWith(isUploading: true);
+
+    try {
+      final ext = (extension ?? 'mp4').toLowerCase();
+      final contentType = _mimeMedia(ext);
+      final path =
+          'media/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+
+      await SupabaseConfig.client.storage.from(kBucket).uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(contentType: contentType, upsert: false),
+          );
+
+      final url =
+          SupabaseConfig.client.storage.from(kBucket).getPublicUrl(path);
+      state = state.copyWith(isUploading: false);
+      return ArticleOpResult.ok(url);
+    } catch (e, stack) {
+      _logError('uploadVideo', e, stack);
+      state = state.copyWith(isUploading: false);
+      return ArticleOpResult.fail(_fmtError(e));
+    }
+  }
+
+  String _mimeImage(String ext) {
     switch (ext) {
       case 'png':
         return 'image/png';
@@ -302,6 +353,35 @@ class ArticlesNotifier extends StateNotifier<ArticlesState> {
         return 'image/gif';
       default:
         return 'image/jpeg';
+    }
+  }
+
+  String _mimeMedia(String ext) {
+    switch (ext) {
+      // Audio
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'aac':
+        return 'audio/aac';
+      case 'flac':
+        return 'audio/flac';
+      // Vidéo
+      case 'mp4':
+        return 'video/mp4';
+      case 'webm':
+        return 'video/webm';
+      case 'mov':
+        return 'video/quicktime';
+      case 'm4v':
+        return 'video/mp4';
+      default:
+        return 'application/octet-stream';
     }
   }
 
@@ -324,10 +404,15 @@ final articlesProvider =
   return ArticlesNotifier();
 });
 
-/// 🏷️ Catégories prédéfinies (modifiables librement)
+/// 🏷️ Catégories (incluant les 3 espaces)
 final articlesCategoriesProvider = Provider<List<String>>((ref) => const [
       'Annonces officielles',
       'Actualités',
+      // ⬇️ ESPACES SPÉCIAUX (affichés dans Magazine/Podcasts/Découverte sur PROD)
+      'Magazine',
+      'Podcast',
+      'Découverte',
+      // ── Catégories classiques ──
       'Politique',
       'Économie',
       'Santé',
