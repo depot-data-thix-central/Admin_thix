@@ -6,8 +6,9 @@ import '../../../supabase/supabase_config.dart';
 import '../../security/providers/security_provider.dart';
 import '../models/admin_certification.dart';
 
+/// 📦 État du module (renommé pour éviter le conflit avec l'enum CertState)
 @immutable
-class CertState {
+class CertificationsState {
   final List<AdminCertification> items;
   final bool isLoading;
   final String? error;
@@ -15,7 +16,7 @@ class CertState {
   final String? tierFilter;
   final bool isActing;
 
-  const CertState({
+  const CertificationsState({
     this.items = const [],
     this.isLoading = false,
     this.error,
@@ -24,7 +25,7 @@ class CertState {
     this.isActing = false,
   });
 
-  CertState copyWith({
+  CertificationsState copyWith({
     List<AdminCertification>? items,
     bool? isLoading,
     String? error,
@@ -34,7 +35,7 @@ class CertState {
     bool clearTier = false,
     bool? isActing,
   }) {
-    return CertState(
+    return CertificationsState(
       items: items ?? this.items,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
@@ -45,8 +46,18 @@ class CertState {
   }
 }
 
-class CertificationsNotifier extends StateNotifier<CertState> {
-  CertificationsNotifier() : super(const CertState()) {
+enum CertStateFilter {
+  pending,
+  active,
+  expiring,
+  suspended,
+  expired,
+  history,
+  all,
+}
+
+class CertificationsNotifier extends StateNotifier<CertificationsState> {
+  CertificationsNotifier() : super(const CertificationsState()) {
     Future.delayed(const Duration(milliseconds: 120), () => load());
   }
 
@@ -129,8 +140,7 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     state = state.copyWith(isActing: true);
     try {
       await SupabaseConfig.client.from(kTable).update(payload).eq('id', userId);
-      SecurityReporter.reportAdminAction(
-          action: actionLabel, targetId: userId);
+      SecurityReporter.reportAdminAction(action: actionLabel, targetId: userId);
       state = state.copyWith(isActing: false);
       await load();
       return true;
@@ -140,7 +150,6 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     }
   }
 
-  /// ✅ Approuver une demande
   Future<bool> approve(String userId, String tier, int months) {
     final now = DateTime.now();
     return _update(userId, {
@@ -155,7 +164,6 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     }, 'certification_approve');
   }
 
-  /// ❌ Refuser / supprimer une demande
   Future<bool> reject(String userId, String reason) {
     return _update(userId, {
       'certification_status': 'rejected',
@@ -163,7 +171,6 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     }, 'certification_reject');
   }
 
-  /// ⏸️ Suspendre (temporaire ou définitif)
   Future<bool> suspend(String userId, int? days, String reason) {
     return _update(userId, {
       'certification_status': 'suspended',
@@ -174,7 +181,6 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     }, 'certification_suspend');
   }
 
-  /// ▶️ Réactiver une certification suspendue
   Future<bool> reactivate(String userId) {
     return _update(userId, {
       'certification_status': 'approved',
@@ -183,7 +189,6 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     }, 'certification_reactivate');
   }
 
-  /// ⏱️ Prolonger la durée
   Future<bool> extend(String userId, DateTime currentExpiry, int days) {
     final base = currentExpiry.isBefore(DateTime.now())
         ? DateTime.now()
@@ -194,7 +199,6 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     }, 'certification_extend');
   }
 
-  /// 🗑️ Révoquer définitivement
   Future<bool> revoke(String userId, String reason) {
     return _update(userId, {
       'certification_status': 'revoked',
@@ -203,7 +207,6 @@ class CertificationsNotifier extends StateNotifier<CertState> {
     }, 'certification_revoke');
   }
 
-  /// 🧹 Supprimer une demande en attente (retour à aucun statut)
   Future<bool> deleteRequest(String userId) {
     return _update(userId, {
       'certification_status': 'none',
@@ -212,9 +215,8 @@ class CertificationsNotifier extends StateNotifier<CertState> {
   }
 }
 
-enum CertStateFilter { pending, active, expiring, suspended, expired, history, all }
-
 final certificationsProvider =
-    StateNotifierProvider<CertificationsNotifier, CertState>((ref) {
+    StateNotifierProvider<CertificationsNotifier, CertificationsState>(
+        (ref) {
   return CertificationsNotifier();
 });
