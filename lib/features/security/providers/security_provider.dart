@@ -258,15 +258,21 @@ class SecurityNotifier extends StateNotifier<SecurityState> {
   }
 
   Future<int> _countProfiles({DateTime? gteCreated, Map<String, String>? eq}) async {
-    var q = SupabaseConfig.client.from('profiles').select('id', count: CountOption.exact);
-    if (gteCreated != null) q = q.gte('created_at', gteCreated.toIso8601String());
-    if (eq != null) {
-      for (final e in eq.entries) {
-        q = q.eq(e.key, e.value);
+    try {
+      var query = SupabaseConfig.client.from('profiles').select('id');
+      if (gteCreated != null) {
+        query = query.gte('created_at', gteCreated.toIso8601String());
       }
+      if (eq != null) {
+        for (final e in eq.entries) {
+          query = query.eq(e.key, e.value);
+        }
+      }
+      final res = await query;
+      return (res as List).length;
+    } catch (_) {
+      return 0;
     }
-    final res = await q;
-    return res.count ?? 0;
   }
 
   List<SecurityEvent> get filteredEvents {
