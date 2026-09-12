@@ -193,7 +193,7 @@ class ErrorAnalyzer {
       case ErrorCategory.nullSafety:
         return Icons.dangerous_outlined;
       case ErrorCategory.database:
-        return Icons.database_outlined;
+        return Icons.storage_outlined;
       case ErrorCategory.network:
         return Icons.wifi_off_rounded;
       case ErrorCategory.unknown:
