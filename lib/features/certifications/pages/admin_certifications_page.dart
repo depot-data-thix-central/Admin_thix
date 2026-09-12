@@ -354,10 +354,8 @@ class _AdminCertificationsPageState
           () => _reasonDialog(c, n, 'Révoquer la certification', n.revoke)));
     }
 
-    if (c.state == CertState.expired) {
-      acts.add(_btn('🔄 Renouveler', AppColors.primary,
-          () => _approveDialog(c, n, renew: true));
-      );
+    if (acts.add(_btn('🔄 Renouveler', AppColors.primary,
+          () => _approveDialog(c, n, renew: true)));
       acts.add(_btn('🗑️ Révoquer', AppColors.danger,
           () => _reasonDialog(c, n, 'Révoquer la certification', n.revoke)));
     }
