@@ -1,4 +1,5 @@
 // lib/features/opportunities/models/admin_opportunity.dart
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 /// 📑 Statuts d'une opportunité
@@ -26,7 +27,7 @@ class OpportunityStatus {
   static bool isVisible(String s) => s == published || s == countdown;
 }
 
-/// 🎯 Opportunité (mirroir de thix_opportunities)
+/// 🎯 Opportunité (miroir de thix_opportunities)
 @immutable
 class AdminOpportunity {
   final String id;
@@ -74,17 +75,40 @@ class AdminOpportunity {
       deadlineLabel: json['deadline_label']?.toString() ?? '',
       deadline: _dt(json['deadline']) ?? DateTime.now(),
       description: json['description']?.toString() ?? '',
-      eligibility: (json['eligibility'] as List?)
-              ?.map((e) => e.toString())
-              .where((e) => e.trim().isNotEmpty)
-              .toList() ??
-          const <String>[],
+      eligibility: _parseList(json['eligibility']),
       applyUrl: json['apply_url']?.toString(),
       imageUrl: json['image_url']?.toString(),
       status: json['status']?.toString() ?? OpportunityStatus.draft,
       createdAt: _dt(json['created_at']) ?? DateTime.now(),
       updatedAt: _dt(json['updated_at']) ?? DateTime.now(),
     );
+  }
+
+  /// 🔒 Parsing sécurisé de 'eligibility' (List, String JSON, ou String simple)
+  static List<String> _parseList(dynamic v) {
+    if (v == null) return const [];
+    if (v is List) {
+      return v
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    if (v is String && v.trim().isNotEmpty) {
+      final str = v.trim();
+      if (str.startsWith('[') && str.endsWith(']')) {
+        try {
+          final decoded = jsonDecode(str);
+          if (decoded is List) {
+            return decoded
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList();
+          }
+        } catch (_) {}
+      }
+      return [str];
+    }
+    return const [];
   }
 
   static DateTime? _dt(Object? v) =>
