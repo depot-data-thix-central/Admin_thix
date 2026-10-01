@@ -2,7 +2,13 @@
 //
 // AdminProvinceFormPage — Production Enterprise (Admin_thix)
 // Version Autonome : Pas de dépendance aux modèles enfants manquants
-// Gestion robuste des IDs et Null Safety corrigée
+//
+// ✅ Correctifs de cette version :
+// - Plus d'erreur "ON CONFLICT DO UPDATE command cannot affect row a second time"
+//   (dédoublonnage par id / url avant chaque upsert)
+// - Les suppressions (croix rouge / corbeille) sont enregistrées en base
+// - Conversion des champs numériques / dates avant envoi
+// - Colonnes alignées sur le schéma réel (achievements, ministers)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -70,6 +76,9 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   List<Map<String, dynamic>> _tribes = [];
   List<Map<String, dynamic>> _galleryMedia = [];
 
+  // ids supprimés par l'utilisateur pendant cette session (table -> ids)
+  final Map<String, Set<String>> _deletedIds = {};
+
   bool _isEditing = false;
   String? _provinceId;
   bool _isBusy = false;
@@ -123,13 +132,81 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // HELPERS DE CONVERSION
+  // ═══════════════════════════════════════════════════════════════
+  static bool _hasText(Map<String, dynamic> m, String key) =>
+      (m[key]?.toString().trim() ?? '').isNotEmpty;
+
+  static String? _nullIfEmpty(dynamic v) {
+    final s = v?.toString().trim() ?? '';
+    return s.isEmpty ? null : s;
+  }
+
+  static int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toInt();
+    final s = v.toString().trim().replaceAll(' ', '');
+    if (s.isEmpty) return null;
+    return int.tryParse(s) ?? double.tryParse(s)?.toInt();
+  }
+
+  static num? _toNum(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v;
+    final s = v.toString().trim().replaceAll(' ', '').replaceAll(',', '.');
+    if (s.isEmpty) return null;
+    return num.tryParse(s);
+  }
+
+  static String? _toDateString(dynamic v) {
+    final s = v?.toString().trim() ?? '';
+    if (s.isEmpty) return null;
+    final d = DateTime.tryParse(s);
+    return d == null ? null : d.toIso8601String().substring(0, 10);
+  }
+
+  /// Nettoie une liste de médias (retire _key, supprime les URL en double).
+  static List<Map<String, dynamic>> _cleanMedia(dynamic media) {
+    if (media is! List) return <Map<String, dynamic>>[];
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final m in media) {
+      if (m is! Map) continue;
+      final copy = Map<String, dynamic>.from(m)..remove('_key');
+      final url = copy['url']?.toString().trim() ?? '';
+      if (url.isEmpty || !seen.add(url)) continue;
+      out.add(copy);
+    }
+    return out;
+  }
+
+  /// Garde la première occurrence de chaque id (évite les doublons de lignes).
+  static List<Map<String, dynamic>> _uniqueById(List<Map<String, dynamic>> list) {
+    final seen = <String>{};
+    return list.where((m) {
+      final id = m['id']?.toString().trim() ?? '';
+      if (id.isEmpty) return true;
+      return seen.add(id);
+    }).toList();
+  }
+
+  /// Retire un élément d'une liste et mémorise son id pour le supprimer en base.
+  void _removeItem(String table, List<Map<String, dynamic>> list, int i) {
+    final id = list[i]['id']?.toString().trim() ?? '';
+    if (id.isNotEmpty) {
+      (_deletedIds[table] ??= <String>{}).add(id);
+    }
+    setState(() => list.removeAt(i));
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // DONNÉES
   // ═══════════════════════════════════════════════════════════════
   void _populateData(Province p) {
     _nameCtrl.text = p.name;
     _codeCtrl.text = p.code;
     _capitalCtrl.text = p.capital;
-    
+
     String safeRegion = p.region.trim();
     if (safeRegion.isNotEmpty) {
       safeRegion = safeRegion[0].toUpperCase() + safeRegion.substring(1).toLowerCase();
@@ -157,92 +234,92 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     _governorPhotoUrl = p.governorPhotoUrl;
     _viceGovernorPhotoUrl = p.viceGovernorPhotoUrl;
 
-    // Mapping sécurisé sans modèles externes
-    _ministers = p.ministers.map<Map<String, dynamic>>((m) => <String, dynamic>{
-      '_key': _newKey(), 
-      'id': m['id'], 
-      'name': m['name'] ?? '', 
-      'role': m['role'] ?? '', 
+    // Mapping sécurisé sans modèles externes (+ dédoublonnage par id)
+    _ministers = _uniqueById(p.ministers.map<Map<String, dynamic>>((m) => <String, dynamic>{
+      '_key': _newKey(),
+      'id': m['id'],
+      'name': m['name'] ?? '',
+      'role': m['role'] ?? '',
       'photo_url': m['photoUrl'] ?? m['photo_url'] ?? '',
-    }).toList();
+    }).toList());
 
-    _cities = p.cities.map<Map<String, dynamic>>((c) => <String, dynamic>{
-      '_key': _newKey(), 
-      'id': c.id, 
-      'province_id': c.provinceId, 
+    _cities = _uniqueById(p.cities.map<Map<String, dynamic>>((c) => <String, dynamic>{
+      '_key': _newKey(),
+      'id': c.id,
+      'province_id': c.provinceId,
       'name': c.name,
-      'population': c.population?.toString() ?? '', 
+      'population': c.population?.toString() ?? '',
       'is_capital': c.isCapital,
-      'mayor': c.mayor ?? '', 
+      'mayor': c.mayor ?? '',
       'mayor_photo_url': c.mayorPhotoUrl ?? '',
       'media': c.media != null ? List<Map<String, dynamic>>.from(c.media!) : <Map<String, dynamic>>[],
-    }).toList();
+    }).toList());
 
-    _economicSectors = p.economicResources.map<Map<String, dynamic>>((e) => <String, dynamic>{
-      '_key': _newKey(), 
-      'id': e.id, 
-      'province_id': e.provinceId, 
+    _economicSectors = _uniqueById(p.economicResources.map<Map<String, dynamic>>((e) => <String, dynamic>{
+      '_key': _newKey(),
+      'id': e.id,
+      'province_id': e.provinceId,
       'name': e.name,
-      'description': e.description ?? '', 
+      'description': e.description ?? '',
       'media': e.media != null ? List<Map<String, dynamic>>.from(e.media!) : <Map<String, dynamic>>[],
-    }).toList();
+    }).toList());
 
-    _tourismSites = p.tourismSites.map<Map<String, dynamic>>((t) => <String, dynamic>{
-      '_key': _newKey(), 
-      'id': t.id, 
-      'province_id': t.provinceId, 
-      'name': t.name, 
+    _tourismSites = _uniqueById(p.tourismSites.map<Map<String, dynamic>>((t) => <String, dynamic>{
+      '_key': _newKey(),
+      'id': t.id,
+      'province_id': t.provinceId,
+      'name': t.name,
       'type': t.type,
-      'description': t.description ?? '', 
+      'description': t.description ?? '',
       'media': t.media != null ? List<Map<String, dynamic>>.from(t.media!) : <Map<String, dynamic>>[],
-    }).toList();
+    }).toList());
 
-    _emergencyContacts = p.emergencyContacts.map<Map<String, dynamic>>((e) => <String, dynamic>{
-      '_key': _newKey(), 
-      'id': e.id, 
-      'province_id': e.provinceId, 
-      'service': e.service, 
+    _emergencyContacts = _uniqueById(p.emergencyContacts.map<Map<String, dynamic>>((e) => <String, dynamic>{
+      '_key': _newKey(),
+      'id': e.id,
+      'province_id': e.provinceId,
+      'service': e.service,
       'phone': e.phone,
-    }).toList();
+    }).toList());
 
-    _administrativeDivisions = p.administrativeDivisions.map<Map<String, dynamic>>((a) => <String, dynamic>{
-      '_key': _newKey(), 
-      'id': a.id, 
-      'province_id': a.provinceId, 
-      'type': a.type, 
+    _administrativeDivisions = _uniqueById(p.administrativeDivisions.map<Map<String, dynamic>>((a) => <String, dynamic>{
+      '_key': _newKey(),
+      'id': a.id,
+      'province_id': a.provinceId,
+      'type': a.type,
       'name': a.name,
-      'capital': a.capital ?? '', 
-      'population': a.population?.toString() ?? '', 
+      'capital': a.capital ?? '',
+      'population': a.population?.toString() ?? '',
       'area': a.area?.toString() ?? '',
-      'administrator': a.administrator ?? '', 
+      'administrator': a.administrator ?? '',
       'media': a.media != null ? List<Map<String, dynamic>>.from(a.media!) : <Map<String, dynamic>>[],
-    }).toList();
+    }).toList());
 
-    _achievements = p.achievements.map<Map<String, dynamic>>((a) => <String, dynamic>{
-      '_key': _newKey(), 
+    _achievements = _uniqueById(p.achievements.map<Map<String, dynamic>>((a) => <String, dynamic>{
+      '_key': _newKey(),
       'id': a['id'],
-      'title': a['title'] ?? '', 
+      'title': a['title'] ?? '',
       'description': a['description'] ?? '',
-      'date': a['date'] ?? '', 
+      'date': a['date'] ?? '',
       'location': a['location'] ?? '',
       'media': a['media'] != null ? List<Map<String, dynamic>>.from(a['media']) : <Map<String, dynamic>>[],
-    }).toList();
+    }).toList());
 
-    _tribes = p.tribes.map<Map<String, dynamic>>((tr) => <String, dynamic>{
-      '_key': _newKey(), 
+    _tribes = _uniqueById(p.tribes.map<Map<String, dynamic>>((tr) => <String, dynamic>{
+      '_key': _newKey(),
       'id': tr['id'],
-      'name': tr['name'] ?? '', 
-      'zone': tr['zone'] ?? '', 
+      'name': tr['name'] ?? '',
+      'zone': tr['zone'] ?? '',
       'history': tr['history'] ?? '',
       'media': tr['media'] != null ? List<Map<String, dynamic>>.from(tr['media']) : <Map<String, dynamic>>[],
-    }).toList();
+    }).toList());
 
-    _galleryMedia = p.galleryMedia.map<Map<String, dynamic>>((m) => {
+    _galleryMedia = _uniqueById(p.galleryMedia.map<Map<String, dynamic>>((m) => <String, dynamic>{
       '_key': _newKey(),
       'id': m['id'],
       'url': m['url'],
       'type': m['type'],
-    }).toList();
+    }).toList());
   }
 
   Future<void> _loadFullData() async {
@@ -307,7 +384,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
       if (mounted) _snack('✅ Médias ajoutés', AppColors.success);
     } catch (e) {
       setState(() => _isBusy = false);
-      if (mounted) _snack(' Upload : $e', AppColors.danger);
+      if (mounted) _snack('❌ Upload : $e', AppColors.danger);
     }
   }
 
@@ -460,7 +537,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     ]),
     const SizedBox(height: 16),
     _sectionCard(icon: Icons.perm_media_rounded, title: 'Galerie média globale', children: [
-      _multiMediaGallery('Tous les médias', _galleryMedia, 'gallery', () => setState(() {})),
+      _multiMediaGallery('Tous les médias', _galleryMedia, 'gallery', () => setState(() {}), deleteTable: 'province_gallery_media'),
     ]),
   ]);
 
@@ -594,7 +671,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   Widget _tribeCard(int i) {
     final t = _tribes[i];
     return Container(key: ValueKey(t['_key']), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF7F8FB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(children: [
-      Row(children: [Text('Tribu ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => setState(() => _tribes.removeAt(i)))]),
+      Row(children: [Text('Tribu ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => _removeItem('province_tribes', _tribes, i))]),
       TextFormField(initialValue: t['name'], onChanged: (v) => _tribes[i]['name'] = v, decoration: _inputDeco('Nom de la tribu', Icons.group_rounded)),
       const SizedBox(height: 8),
       TextFormField(initialValue: t['zone'], onChanged: (v) => _tribes[i]['zone'] = v, decoration: _inputDeco('Zone / Territoire', Icons.place_rounded)),
@@ -608,7 +685,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   Widget _cityCard(int i) {
     final c = _cities[i];
     return Container(key: ValueKey(c['_key']), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF7F8FB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Text('Ville ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), Switch(value: c['is_capital'] ?? false, onChanged: (v) => setState(() => _cities[i]['is_capital'] = v), activeColor: AppColors.secondary), const Text('Chef-lieu', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => setState(() => _cities.removeAt(i)))]),
+      Row(children: [Text('Ville ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), Switch(value: c['is_capital'] ?? false, onChanged: (v) => setState(() => _cities[i]['is_capital'] = v), activeColor: AppColors.secondary), const Text('Chef-lieu', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => _removeItem('cities', _cities, i))]),
       TextFormField(initialValue: c['name'], onChanged: (v) => _cities[i]['name'] = v, decoration: _inputDeco('Nom de la ville', Icons.location_city_rounded)),
       const SizedBox(height: 8),
       TextFormField(initialValue: c['population'], onChanged: (v) => _cities[i]['population'] = v, keyboardType: TextInputType.number, decoration: _inputDeco('Population', Icons.groups_rounded)),
@@ -624,7 +701,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   Widget _sectorCard(int i) {
     final s = _economicSectors[i];
     return Container(key: ValueKey(s['_key']), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF7F8FB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(children: [
-      Row(children: [Text('Secteur ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => setState(() => _economicSectors.removeAt(i)))]),
+      Row(children: [Text('Secteur ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => _removeItem('province_economic_resources', _economicSectors, i))]),
       TextFormField(initialValue: s['name'], onChanged: (v) => _economicSectors[i]['name'] = v, decoration: _inputDeco('Nom du secteur', Icons.business_rounded)),
       const SizedBox(height: 8),
       TextFormField(initialValue: s['description'], onChanged: (v) => _economicSectors[i]['description'] = v, maxLines: 2, decoration: _inputDeco('Détails', Icons.notes_rounded)),
@@ -636,7 +713,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   Widget _tourismCard(int i) {
     final t = _tourismSites[i];
     return Container(key: ValueKey(t['_key']), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF7F8FB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(children: [
-      Row(children: [Text('Site ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => setState(() => _tourismSites.removeAt(i)))]),
+      Row(children: [Text('Site ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => _removeItem('province_tourism_sites', _tourismSites, i))]),
       TextFormField(initialValue: t['name'], onChanged: (v) => _tourismSites[i]['name'] = v, decoration: _inputDeco('Nom du site', Icons.place_rounded)),
       const SizedBox(height: 8),
       TextFormField(initialValue: t['type'], onChanged: (v) => _tourismSites[i]['type'] = v, decoration: _inputDeco('Type (Parc, Cascade...)', Icons.category_rounded)),
@@ -650,7 +727,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   Widget _divisionCard(int i) {
     final d = _administrativeDivisions[i];
     return Container(key: ValueKey(d['_key']), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF7F8FB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(children: [
-      Row(children: [Text('Division ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => setState(() => _administrativeDivisions.removeAt(i)))]),
+      Row(children: [Text('Division ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => _removeItem('province_administrative_divisions', _administrativeDivisions, i))]),
       Row(children: [Expanded(child: TextFormField(initialValue: d['type'], onChanged: (v) => _administrativeDivisions[i]['type'] = v, decoration: _inputDeco('Type', Icons.category_rounded))), const SizedBox(width: 8), Expanded(child: TextFormField(initialValue: d['name'], onChanged: (v) => _administrativeDivisions[i]['name'] = v, decoration: _inputDeco('Nom', Icons.place_rounded)))]),
       const SizedBox(height: 8),
       TextFormField(initialValue: d['capital'], onChanged: (v) => _administrativeDivisions[i]['capital'] = v, decoration: _inputDeco('Chef-lieu', Icons.star_rounded)),
@@ -666,10 +743,10 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   Widget _achievementCard(int i) {
     final a = _achievements[i];
     return Container(key: ValueKey(a['_key']), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF7F8FB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(children: [
-      Row(children: [Text('Projet ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => setState(() => _achievements.removeAt(i)))]),
+      Row(children: [Text('Projet ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)), const Spacer(), IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20), onPressed: () => _removeItem('province_achievements', _achievements, i))]),
       TextFormField(initialValue: a['title'], onChanged: (v) => _achievements[i]['title'] = v, decoration: _inputDeco('Titre du projet', Icons.title_rounded)),
       const SizedBox(height: 8),
-      Row(children: [Expanded(child: TextFormField(initialValue: a['date'], onChanged: (v) => _achievements[i]['date'] = v, decoration: _inputDeco('Date', Icons.calendar_today_rounded))), const SizedBox(width: 8), Expanded(child: TextFormField(initialValue: a['location'], onChanged: (v) => _achievements[i]['location'] = v, decoration: _inputDeco('Lieu', Icons.location_on_rounded)))]),
+      Row(children: [Expanded(child: TextFormField(initialValue: a['date'], onChanged: (v) => _achievements[i]['date'] = v, decoration: _inputDeco('Date (AAAA-MM-JJ)', Icons.calendar_today_rounded))), const SizedBox(width: 8), Expanded(child: TextFormField(initialValue: a['location'], onChanged: (v) => _achievements[i]['location'] = v, decoration: _inputDeco('Lieu', Icons.location_on_rounded)))]),
       const SizedBox(height: 8),
       TextFormField(initialValue: a['description'], onChanged: (v) => _achievements[i]['description'] = v, maxLines: 2, decoration: _inputDeco('Description', Icons.description_rounded)),
       const SizedBox(height: 8),
@@ -683,7 +760,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
       Expanded(child: Padding(padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4), child: TextFormField(initialValue: e['service'], onChanged: (v) => _emergencyContacts[i]['service'] = v, decoration: _inputDeco('Service', Icons.local_hospital_rounded)))),
       const SizedBox(width: 8),
       Expanded(child: Padding(padding: const EdgeInsets.only(right: 4, top: 4, bottom: 4), child: TextFormField(initialValue: e['phone'], onChanged: (v) => _emergencyContacts[i]['phone'] = v, keyboardType: TextInputType.phone, decoration: _inputDeco('Numéro', Icons.phone_rounded)))),
-      IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger), onPressed: () => setState(() => _emergencyContacts.removeAt(i))),
+      IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger), onPressed: () => _removeItem('province_emergency_contacts', _emergencyContacts, i)),
     ]));
   }
 
@@ -746,7 +823,9 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     );
   }
 
-  Widget _multiMediaGallery(String label, List<dynamic> mediaList, String folder, VoidCallback onUpdate) {
+  /// [deleteTable] : si renseigné, la suppression d'un média qui a un `id`
+  /// est mémorisée pour être appliquée en base à l'enregistrement.
+  Widget _multiMediaGallery(String label, List<dynamic> mediaList, String folder, VoidCallback onUpdate, {String? deleteTable}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
       const SizedBox(height: 8),
@@ -761,7 +840,14 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
               width: 70, height: 70, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE5E7EB))),
               child: ClipRRect(borderRadius: BorderRadius.circular(8), child: isVideo ? Container(color: AppColors.primary, child: const Icon(Icons.videocam_rounded, color: Colors.white, size: 28)) : CachedNetworkImage(imageUrl: url, fit: BoxFit.cover, placeholder: (_, __) => const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))), errorWidget: (_, __, ___) => const Icon(Icons.broken_image_rounded, color: Colors.grey, size: 24))),
             ),
-            Positioned(right: 0, top: 0, child: GestureDetector(onTap: () { mediaList.removeAt(idx); onUpdate(); }, child: Container(decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: const Icon(Icons.close_rounded, size: 12, color: Colors.white)))),
+            Positioned(right: 0, top: 0, child: GestureDetector(onTap: () {
+              final removed = mediaList.removeAt(idx);
+              if (deleteTable != null && removed is Map) {
+                final id = removed['id']?.toString().trim() ?? '';
+                if (id.isNotEmpty) (_deletedIds[deleteTable] ??= <String>{}).add(id);
+              }
+              onUpdate();
+            }, child: Container(decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: const Icon(Icons.close_rounded, size: 12, color: Colors.white)))),
           ]);
         }),
         InkWell(onTap: () => _uploadMultiFiles(folder, (url, type) { mediaList.add({'url': url, 'type': type, '_key': _newKey()}); onUpdate(); }), borderRadius: BorderRadius.circular(8), child: Container(width: 70, height: 70, decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.05), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.primary.withOpacity(0.3))), child: Icon(Icons.add_a_photo_rounded, color: AppColors.primary))),
@@ -775,55 +861,187 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SAUVEGARDE SÉPARÉE (INSERT vs UPDATE) - CORRIGÉE
+  // SAUVEGARDE
   // ═══════════════════════════════════════════════════════════════
-  
-  // Helper pour préparer les données et gérer les IDs
-  Map<String, dynamic> _prepareDataForSave(Map<String, dynamic> item, String provinceId) {
-    final data = Map<String, dynamic>.from(item)..remove('_key');
-    data['province_id'] = provinceId;
-    
-    // Si l'ID est vide ou null, on le retire pour que Supabase génère un nouvel UUID
-    if (data['id'] == null || data['id'].toString().trim().isEmpty) {
-      data.remove('id');
-    }
-    return data;
-  }
 
-  Future<void> _saveRelations(String savedProvinceId) async {
-    // Fonction utilitaire interne pour éviter la répétition
-    Future<void> _saveTable(String tableName, List<Map<String, dynamic>> items) async {
-      if (items.isEmpty) return;
-      
+  /// Synchronise une table liée à la province :
+  /// 1. supprime les lignes retirées par l'utilisateur,
+  /// 2. dédoublonne (id, et clé métier si [dedupeBy]) pour éviter l'erreur
+  ///    "ON CONFLICT DO UPDATE command cannot affect row a second time",
+  /// 3. insère les nouvelles lignes, met à jour les existantes.
+  Future<void> _syncTable({
+    required String table,
+    required String provinceId,
+    required List<Map<String, dynamic>> items,
+    required Map<String, dynamic> Function(Map<String, dynamic> item) toRow,
+    bool Function(Map<String, dynamic> item)? isValid,
+    String Function(Map<String, dynamic> item)? dedupeBy,
+  }) async {
+    try {
+      final client = SupabaseConfig.client;
+
+      // 1. Suppressions demandées par l'utilisateur
+      final deleted = _deletedIds[table];
+      if (deleted != null && deleted.isNotEmpty) {
+        await client
+            .from(table)
+            .delete()
+            .eq('province_id', provinceId)
+            .inFilter('id', deleted.toList());
+      }
+
+      // 2. Préparation + dédoublonnage
       final toInsert = <Map<String, dynamic>>[];
       final toUpdate = <Map<String, dynamic>>[];
-      
-      for (var item in items) {
-        final data = _prepareDataForSave(item, savedProvinceId);
-        if (data.containsKey('id')) {
-          toUpdate.add(data);
+      final seenIds = <String>{};
+      final seenKeys = <String>{};
+
+      for (final item in items) {
+        if (isValid != null && !isValid(item)) continue;
+
+        final id = item['id']?.toString().trim() ?? '';
+        final hasId = id.isNotEmpty;
+
+        if (hasId && !seenIds.add(id)) continue; // même id déjà dans le lot
+        if (dedupeBy != null && !seenKeys.add(dedupeBy(item))) continue;
+
+        final row = toRow(item);
+        row['province_id'] = provinceId;
+
+        if (hasId) {
+          row['id'] = id;
+          toUpdate.add(row);
         } else {
-          toInsert.add(data);
+          row.remove('id');
+          toInsert.add(row);
         }
       }
-      
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from(tableName).insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from(tableName).upsert(toUpdate);
-    }
 
-    // Sauvegarde de toutes les tables
-    await _saveTable('cities', _cities);
-    await _saveTable('province_economic_resources', _economicSectors);
-    await _saveTable('province_tourism_sites', _tourismSites);
-    await _saveTable('province_emergency_contacts', _emergencyContacts);
-    await _saveTable('province_administrative_divisions', _administrativeDivisions);
-    await _saveTable('province_achievements', _achievements.where((a) => (a['title'] ?? '').trim().isNotEmpty).toList());
-    await _saveTable('province_tribes', _tribes.where((t) => (t['name'] ?? '').trim().isNotEmpty).toList());
-    await _saveTable('province_ministers', _ministers.where((m) => (m['name'] ?? '').trim().isNotEmpty).toList());
-    await _saveTable('province_gallery_media', _galleryMedia);
+      // 3. Écriture
+      if (toInsert.isNotEmpty) await client.from(table).insert(toInsert);
+      if (toUpdate.isNotEmpty) await client.from(table).upsert(toUpdate);
+    } catch (e) {
+      throw Exception('[$table] $e');
+    }
   }
 
-  void _save() async {
+  Future<void> _saveRelations(String provinceId) async {
+    await _syncTable(
+      table: 'cities',
+      provinceId: provinceId,
+      items: _cities,
+      isValid: (c) => _hasText(c, 'name'),
+      toRow: (c) => <String, dynamic>{
+        'name': c['name'].toString().trim(),
+        'is_capital': c['is_capital'] == true,
+        'population': _toInt(c['population']),
+        'mayor': _nullIfEmpty(c['mayor']),
+        'mayor_photo_url': _nullIfEmpty(c['mayor_photo_url']),
+        'media': _cleanMedia(c['media']),
+      },
+    );
+
+    await _syncTable(
+      table: 'province_economic_resources',
+      provinceId: provinceId,
+      items: _economicSectors,
+      isValid: (s) => _hasText(s, 'name'),
+      toRow: (s) => <String, dynamic>{
+        'name': s['name'].toString().trim(),
+        'description': _nullIfEmpty(s['description']),
+        'media': _cleanMedia(s['media']),
+      },
+    );
+
+    await _syncTable(
+      table: 'province_tourism_sites',
+      provinceId: provinceId,
+      items: _tourismSites,
+      isValid: (t) => _hasText(t, 'name'),
+      toRow: (t) => <String, dynamic>{
+        'name': t['name'].toString().trim(),
+        'type': _nullIfEmpty(t['type']),
+        'description': _nullIfEmpty(t['description']),
+        'media': _cleanMedia(t['media']),
+      },
+    );
+
+    await _syncTable(
+      table: 'province_emergency_contacts',
+      provinceId: provinceId,
+      items: _emergencyContacts,
+      isValid: (e) => _hasText(e, 'service'),
+      toRow: (e) => <String, dynamic>{
+        'service': e['service'].toString().trim(),
+        'phone': _nullIfEmpty(e['phone']),
+      },
+    );
+
+    await _syncTable(
+      table: 'province_administrative_divisions',
+      provinceId: provinceId,
+      items: _administrativeDivisions,
+      isValid: (d) => _hasText(d, 'name'),
+      toRow: (d) => <String, dynamic>{
+        'type': _nullIfEmpty(d['type']),
+        'name': d['name'].toString().trim(),
+        'capital': _nullIfEmpty(d['capital']),
+        'population': _toInt(d['population']),
+        'area': _toNum(d['area']),
+        'administrator': _nullIfEmpty(d['administrator']),
+        'media': _cleanMedia(d['media']),
+      },
+    );
+
+    // La table province_achievements n'a pas de colonnes `location` ni `media`
+    await _syncTable(
+      table: 'province_achievements',
+      provinceId: provinceId,
+      items: _achievements,
+      isValid: (a) => _hasText(a, 'title'),
+      toRow: (a) {
+        final media = _cleanMedia(a['media']);
+        return <String, dynamic>{
+          'title': a['title'].toString().trim(),
+          'description': _nullIfEmpty(a['description']),
+          'date': _toDateString(a['date']),
+          'cover_image_url': media.isNotEmpty ? media.first['url'] : null,
+        };
+      },
+    );
+
+    await _syncTable(
+      table: 'province_tribes',
+      provinceId: provinceId,
+      items: _tribes,
+      isValid: (t) => _hasText(t, 'name'),
+      toRow: (t) => <String, dynamic>{
+        'name': t['name'].toString().trim(),
+        'zone': _nullIfEmpty(t['zone']),
+        'history': _nullIfEmpty(t['history']),
+        'media': _cleanMedia(t['media']),
+      },
+    );
+
+    // Galerie globale : une URL ne peut apparaître qu'une fois
+    await _syncTable(
+      table: 'province_gallery_media',
+      provinceId: provinceId,
+      items: _galleryMedia,
+      isValid: (m) => _hasText(m, 'url'),
+      dedupeBy: (m) => m['url'].toString().trim(),
+      toRow: (m) => <String, dynamic>{
+        'url': m['url'].toString().trim(),
+        'type': _nullIfEmpty(m['type']) ?? 'photo',
+      },
+    );
+
+    // NB : province_ministers est liée à un gouvernement (government_id) et
+    // n'a ni `name` ni `province_id` : elle n'est pas enregistrée depuis ce
+    // formulaire (voir le formulaire Gouvernement).
+  }
+
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
       _snack('⚠️ Veuillez remplir les champs obligatoires (avec *)', AppColors.warning);
       return;
@@ -859,18 +1077,16 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
 
       String savedProvinceId;
 
-      // 2. Sauvegarder la province principale (Correction Null Safety ici)
+      // 2. Sauvegarder la province principale
       if (_provinceId == null) {
-        // INSERT
         final res = await SupabaseConfig.client.from('provinces').insert(provinceData).select();
-        savedProvinceId = (res as List).first['id'];
+        savedProvinceId = (res as List).first['id'].toString();
       } else {
-        // UPDATE : Utilisation de '!' car on sait que _provinceId n'est pas null dans ce bloc
         await SupabaseConfig.client.from('provinces').update(provinceData).eq('id', _provinceId!);
         savedProvinceId = _provinceId!;
       }
 
-      // 3. Sauvegarder toutes les relations séparément
+      // 3. Sauvegarder toutes les relations (dédoublonnées)
       await _saveRelations(savedProvinceId);
 
       // 4. Rafraîchir les providers
@@ -880,7 +1096,14 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
 
       if (!mounted) return;
       setState(() => _isBusy = false);
-      _snack('✅ Province enregistrée avec succès', AppColors.success);
+
+      final hasMinisters = _ministers.any((m) => _hasText(m, 'name'));
+      _snack(
+        hasMinisters
+            ? '✅ Province enregistrée (les ministres ne sont pas enregistrés depuis ce formulaire)'
+            : '✅ Province enregistrée avec succès',
+        hasMinisters ? AppColors.warning : AppColors.success,
+      );
       context.pop();
     } catch (e) {
       if (!mounted) return;
