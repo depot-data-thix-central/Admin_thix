@@ -69,7 +69,7 @@ class ExemplaryCitizen {
       'biography': biography,
       'photo_url': photoUrl,
       'recognition_date': recognitionDate?.toIso8601String().split('T').first,
-      'media': media.isEmpty ? '[]'::jsonb : media,
+      'media': media.isEmpty ? [] : media,  // ✅ CORRIGÉ : [] au lieu de '[]'::jsonb
       'is_active': isActive,
     };
     if (isInsert) {
