@@ -2,10 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/app_colors.dart';
 import '../providers/provinces_provider.dart';
+import 'admin_province_form_page.dart'; // ✅ Ajouté
 
 class AdminProvincesPage extends ConsumerWidget {
   const AdminProvincesPage({super.key});
@@ -28,7 +28,14 @@ class AdminProvincesPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add_rounded),
-            onPressed: () => context.push('/mon-pays/provinces/form'),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AdminProvinceFormPage(),
+                ),
+              );
+            },
             tooltip: 'Ajouter une province',
           ),
         ],
@@ -88,7 +95,15 @@ class AdminProvincesPage extends ConsumerWidget {
                     child: Text('Capitale: ${p.capital} • Région: ${p.region}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                   ),
                   trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-                  onTap: () => context.push('/mon-pays/provinces/form', extra: p),
+                  onTap: () {
+                    // ✅ Navigation vers le formulaire d'édition
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AdminProvinceFormPage(province: p),
+                      ),
+                    );
+                  },
                 ),
               );
             },
