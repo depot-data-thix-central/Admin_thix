@@ -17,8 +17,8 @@ import '../features/opportunities/pages/admin_opportunities_page.dart';
 import '../features/opportunities/providers/opportunities_provider.dart';
 
 // ═══ MODULE MON PAYS ═══
-import '../features/mon_pays/pages/admin_provinces_page.dart';       // ✅ AJOUTÉ
-import '../features/mon_pays/pages/admin_citizens_page.dart';
+import '../features/mon_pays/pages/admin_provinces_page.dart';       
+import '../features/citizens/pages/admin_citizens_page.dart';       
 import '../features/mon_pays/pages/admin_historical_figures_page.dart';
 import '../features/mon_pays/pages/admin_banners_page.dart';
 
