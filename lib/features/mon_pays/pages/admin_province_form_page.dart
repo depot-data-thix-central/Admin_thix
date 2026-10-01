@@ -2,6 +2,7 @@
 //
 // AdminProvinceFormPage — Production Enterprise (Admin_thix)
 // Gestion complète des provinces avec relations imbriquées et uploads Supabase
+// Optimisé : Séparation Insert/Update pour éviter les conflits de clés
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/app_colors.dart';
 import '../../../supabase/supabase_config.dart';
 import '../models/province.dart';
+import '../models/city.dart';
+import '../models/province_economic.dart';
+import '../models/province_tourism.dart';
+import '../models/province_emergency.dart';
+import '../models/province_administrative.dart';
 import '../providers/provinces_provider.dart';
 
 class AdminProvinceFormPage extends ConsumerStatefulWidget {
@@ -51,14 +57,14 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   String _region = 'Centre';
   static const List<String> _regions = ['Centre', 'Est', 'Ouest', 'Nord', 'Sud'];
 
-  // ── Images ──
+  // ─ Images ──
   String? _coverImageUrl;
   String? _coatOfArmsUrl;
   String? _mapUrl;
   String? _governorPhotoUrl;
   String? _viceGovernorPhotoUrl;
 
-  // ── Relations imbriquées ──
+  // ── Relations imbriquées (Stockage local temporaire) ──
   List<Map<String, dynamic>> _ministers = [];
   List<Map<String, dynamic>> _cities = [];
   List<Map<String, dynamic>> _economicSectors = [];
@@ -85,6 +91,12 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     _isEditing = p != null;
     _provinceId = p?.id;
 
+    _initControllers();
+    if (p != null) _populateData(p);
+    if (_isEditing && _provinceId != null) _loadFullData();
+  }
+
+  void _initControllers() {
     _nameCtrl = TextEditingController();
     _codeCtrl = TextEditingController();
     _capitalCtrl = TextEditingController();
@@ -101,9 +113,6 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     _websiteCtrl = TextEditingController();
     _governorCtrl = TextEditingController();
     _viceGovernorCtrl = TextEditingController();
-
-    if (p != null) _populateData(p);
-    if (_isEditing && _provinceId != null) _loadFullData();
   }
 
   @override
@@ -153,49 +162,92 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     _governorPhotoUrl = p.governorPhotoUrl;
     _viceGovernorPhotoUrl = p.viceGovernorPhotoUrl;
 
+    // Mapping des listes avec gestion sécurisée des IDs
     _ministers = p.ministers.map<Map<String, dynamic>>((m) => <String, dynamic>{
-      '_key': _newKey(), 'name': m['name'] ?? '', 'role': m['role'] ?? '', 'photo_url': m['photoUrl'] ?? m['photo_url'] ?? '',
+      '_key': _newKey(), 
+      'id': m['id'], // Garder l'ID si existant
+      'name': m['name'] ?? '', 
+      'role': m['role'] ?? '', 
+      'photo_url': m['photoUrl'] ?? m['photo_url'] ?? '',
     }).toList();
 
     _cities = p.cities.map<Map<String, dynamic>>((c) => <String, dynamic>{
-      '_key': _newKey(), 'id': c.id, 'province_id': c.provinceId, 'name': c.name,
-      'population': c.population?.toString() ?? '', 'is_capital': c.isCapital,
-      'mayor': c.mayor ?? '', 'mayor_photo_url': c.mayorPhotoUrl ?? '',
+      '_key': _newKey(), 
+      'id': c.id, 
+      'province_id': c.provinceId, 
+      'name': c.name,
+      'population': c.population?.toString() ?? '', 
+      'is_capital': c.isCapital,
+      'mayor': c.mayor ?? '', 
+      'mayor_photo_url': c.mayorPhotoUrl ?? '',
       'media': c.media != null ? List<Map<String, dynamic>>.from(c.media!) : <Map<String, dynamic>>[],
     }).toList();
 
     _economicSectors = p.economicResources.map<Map<String, dynamic>>((e) => <String, dynamic>{
-      '_key': _newKey(), 'id': e.id, 'province_id': e.provinceId, 'name': e.name,
-      'description': e.description ?? '', 'media': e.media != null ? List<Map<String, dynamic>>.from(e.media!) : <Map<String, dynamic>>[],
+      '_key': _newKey(), 
+      'id': e.id, 
+      'province_id': e.provinceId, 
+      'name': e.name,
+      'description': e.description ?? '', 
+      'media': e.media != null ? List<Map<String, dynamic>>.from(e.media!) : <Map<String, dynamic>>[],
     }).toList();
 
     _tourismSites = p.tourismSites.map<Map<String, dynamic>>((t) => <String, dynamic>{
-      '_key': _newKey(), 'id': t.id, 'province_id': t.provinceId, 'name': t.name, 'type': t.type,
-      'description': t.description ?? '', 'media': t.media != null ? List<Map<String, dynamic>>.from(t.media!) : <Map<String, dynamic>>[],
+      '_key': _newKey(), 
+      'id': t.id, 
+      'province_id': t.provinceId, 
+      'name': t.name, 
+      'type': t.type,
+      'description': t.description ?? '', 
+      'media': t.media != null ? List<Map<String, dynamic>>.from(t.media!) : <Map<String, dynamic>>[],
     }).toList();
 
     _emergencyContacts = p.emergencyContacts.map<Map<String, dynamic>>((e) => <String, dynamic>{
-      '_key': _newKey(), 'id': e.id, 'province_id': e.provinceId, 'service': e.service, 'phone': e.phone,
+      '_key': _newKey(), 
+      'id': e.id, 
+      'province_id': e.provinceId, 
+      'service': e.service, 
+      'phone': e.phone,
     }).toList();
 
     _administrativeDivisions = p.administrativeDivisions.map<Map<String, dynamic>>((a) => <String, dynamic>{
-      '_key': _newKey(), 'id': a.id, 'province_id': a.provinceId, 'type': a.type, 'name': a.name,
-      'capital': a.capital ?? '', 'population': a.population?.toString() ?? '', 'area': a.area?.toString() ?? '',
-      'administrator': a.administrator ?? '', 'media': a.media != null ? List<Map<String, dynamic>>.from(a.media!) : <Map<String, dynamic>>[],
+      '_key': _newKey(), 
+      'id': a.id, 
+      'province_id': a.provinceId, 
+      'type': a.type, 
+      'name': a.name,
+      'capital': a.capital ?? '', 
+      'population': a.population?.toString() ?? '', 
+      'area': a.area?.toString() ?? '',
+      'administrator': a.administrator ?? '', 
+      'media': a.media != null ? List<Map<String, dynamic>>.from(a.media!) : <Map<String, dynamic>>[],
     }).toList();
 
     _achievements = p.achievements.map<Map<String, dynamic>>((a) => <String, dynamic>{
-      '_key': _newKey(), 'title': a['title'] ?? '', 'description': a['description'] ?? '',
-      'date': a['date'] ?? '', 'location': a['location'] ?? '',
+      '_key': _newKey(), 
+      'id': a['id'],
+      'title': a['title'] ?? '', 
+      'description': a['description'] ?? '',
+      'date': a['date'] ?? '', 
+      'location': a['location'] ?? '',
       'media': a['media'] != null ? List<Map<String, dynamic>>.from(a['media']) : <Map<String, dynamic>>[],
     }).toList();
 
     _tribes = p.tribes.map<Map<String, dynamic>>((tr) => <String, dynamic>{
-      '_key': _newKey(), 'name': tr['name'] ?? '', 'zone': tr['zone'] ?? '', 'history': tr['history'] ?? '',
+      '_key': _newKey(), 
+      'id': tr['id'],
+      'name': tr['name'] ?? '', 
+      'zone': tr['zone'] ?? '', 
+      'history': tr['history'] ?? '',
       'media': tr['media'] != null ? List<Map<String, dynamic>>.from(tr['media']) : <Map<String, dynamic>>[],
     }).toList();
 
-    _galleryMedia = p.galleryMedia.map<Map<String, dynamic>>((m) => Map<String, dynamic>.from(m)).toList();
+    _galleryMedia = p.galleryMedia.map<Map<String, dynamic>>((m) => {
+      '_key': _newKey(),
+      'id': m['id'],
+      'url': m['url'],
+      'type': m['type'],
+    }).toList();
   }
 
   Future<void> _loadFullData() async {
@@ -372,8 +424,8 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // TABS CONTENT (Résumé pour concision, structure complète incluse)
+  // ══════════════════════════════════════════════════════════════
+  // TABS CONTENT
   // ═══════════════════════════════════════════════════════════════
   Widget _buildTabIdentity() => ListView(padding: const EdgeInsets.all(16), children: [
     _sectionCard(icon: Icons.badge_rounded, title: 'Informations de base', children: [
@@ -441,7 +493,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     ]),
     const SizedBox(height: 16),
     _sectionCard(icon: Icons.people_alt_rounded, title: 'Ministres', action: TextButton.icon(
-      onPressed: () => setState(() => _ministers.add({'_key': _newKey(), 'name': '', 'role': '', 'photo_url': ''})),
+      onPressed: () => setState(() => _ministers.add({'_key': _newKey(), 'id': null, 'name': '', 'role': '', 'photo_url': ''})),
       icon: const Icon(Icons.add_rounded, size: 16), label: const Text('Ajouter'),
     ), children: [
       for (int i = 0; i < _ministers.length; i++) ...[_ministerCard(i), if (i < _ministers.length - 1) const SizedBox(height: 12)],
@@ -459,7 +511,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     ]),
     const SizedBox(height: 16),
     _sectionCard(icon: Icons.groups_rounded, title: 'Peuples & Tribus', action: TextButton.icon(
-      onPressed: () => setState(() => _tribes.add({'_key': _newKey(), 'name': '', 'zone': '', 'history': '', 'media': <Map<String, dynamic>>[]})),
+      onPressed: () => setState(() => _tribes.add({'_key': _newKey(), 'id': null, 'name': '', 'zone': '', 'history': '', 'media': <Map<String, dynamic>>[]})),
       icon: const Icon(Icons.add_rounded, size: 16), label: const Text('Ajouter'),
     ), children: [
       for (int i = 0; i < _tribes.length; i++) ...[_tribeCard(i), if (i < _tribes.length - 1) const SizedBox(height: 12)],
@@ -507,7 +559,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     ]),
     const SizedBox(height: 16),
     _sectionCard(icon: Icons.emoji_events_rounded, title: 'Réalisations majeures', action: TextButton.icon(
-      onPressed: () => setState(() => _achievements.add({'_key': _newKey(), 'title': '', 'description': '', 'date': '', 'location': '', 'media': <Map<String, dynamic>>[]})),
+      onPressed: () => setState(() => _achievements.add({'_key': _newKey(), 'id': null, 'title': '', 'description': '', 'date': '', 'location': '', 'media': <Map<String, dynamic>>[]})),
       icon: const Icon(Icons.add_rounded, size: 16), label: const Text('Ajouter'),
     ), children: [
       for (int i = 0; i < _achievements.length; i++) ...[_achievementCard(i), if (i < _achievements.length - 1) const SizedBox(height: 12)],
@@ -717,7 +769,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
             Positioned(right: 0, top: 0, child: GestureDetector(onTap: () { mediaList.removeAt(idx); onUpdate(); }, child: Container(decoration: const BoxDecoration(color: AppColors.danger, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: const Icon(Icons.close_rounded, size: 12, color: Colors.white)))),
           ]);
         }),
-        InkWell(onTap: () => _uploadMultiFiles(folder, (url, type) { mediaList.add({'url': url, 'type': type}); onUpdate(); }), borderRadius: BorderRadius.circular(8), child: Container(width: 70, height: 70, decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.05), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.primary.withOpacity(0.3))), child: Icon(Icons.add_a_photo_rounded, color: AppColors.primary))),
+        InkWell(onTap: () => _uploadMultiFiles(folder, (url, type) { mediaList.add({'url': url, 'type': type, '_key': _newKey()}); onUpdate(); }), borderRadius: BorderRadius.circular(8), child: Container(width: 70, height: 70, decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.05), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.primary.withOpacity(0.3))), child: Icon(Icons.add_a_photo_rounded, color: AppColors.primary))),
       ]),
     ]);
   }
@@ -728,8 +780,137 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SAUVEGARDE
+  // SAUVEGARDE SÉPARÉE (INSERT vs UPDATE)
   // ═══════════════════════════════════════════════════════════════
+  
+  // Helper pour séparer les nouveaux éléments (sans ID) des existants (avec ID)
+  Map<String, dynamic> _prepareDataForSave(Map<String, dynamic> item, String provinceId) {
+    final data = Map<String, dynamic>.from(item)..remove('_key');
+    data['province_id'] = provinceId;
+    
+    // Si l'ID est vide ou null, on le retire pour que Supabase génère un nouvel UUID
+    if (data['id'] == null || data['id'].toString().trim().isEmpty) {
+      data.remove('id');
+    }
+    return data;
+  }
+
+  Future<void> _saveRelations(String savedProvinceId) async {
+    // 1. VILLES
+    if (_cities.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      
+      for (var c in _cities) {
+        final data = _prepareDataForSave(c, savedProvinceId);
+        if (data.containsKey('id')) {
+          toUpdate.add(data);
+        } else {
+          toInsert.add(data);
+        }
+      }
+      
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('cities').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('cities').upsert(toUpdate);
+    }
+
+    // 2. ÉCONOMIE
+    if (_economicSectors.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var e in _economicSectors) {
+        final data = _prepareDataForSave(e, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_economic_resources').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_economic_resources').upsert(toUpdate);
+    }
+
+    // 3. TOURISME
+    if (_tourismSites.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var t in _tourismSites) {
+        final data = _prepareDataForSave(t, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_tourism_sites').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_tourism_sites').upsert(toUpdate);
+    }
+
+    // 4. URGENCES
+    if (_emergencyContacts.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var e in _emergencyContacts) {
+        final data = _prepareDataForSave(e, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_emergency_contacts').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_emergency_contacts').upsert(toUpdate);
+    }
+
+    // 5. DIVISIONS ADMINISTRATIVES
+    if (_administrativeDivisions.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var a in _administrativeDivisions) {
+        final data = _prepareDataForSave(a, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_administrative_divisions').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_administrative_divisions').upsert(toUpdate);
+    }
+
+    // 6. RÉALISATIONS
+    if (_achievements.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var a in _achievements.where((a) => (a['title'] ?? '').trim().isNotEmpty)) {
+        final data = _prepareDataForSave(a, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_achievements').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_achievements').upsert(toUpdate);
+    }
+
+    // 7. TRIBUS
+    if (_tribes.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var t in _tribes.where((t) => (t['name'] ?? '').trim().isNotEmpty)) {
+        final data = _prepareDataForSave(t, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_tribes').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_tribes').upsert(toUpdate);
+    }
+
+    // 8. MINISTRES
+    if (_ministers.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var m in _ministers.where((m) => (m['name'] ?? '').trim().isNotEmpty)) {
+        final data = _prepareDataForSave(m, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_ministers').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_ministers').upsert(toUpdate);
+    }
+
+    // 9. GALERIE MÉDIA
+    if (_galleryMedia.isNotEmpty) {
+      final toInsert = <Map<String, dynamic>>[];
+      final toUpdate = <Map<String, dynamic>>[];
+      for (var g in _galleryMedia) {
+        final data = _prepareDataForSave(g, savedProvinceId);
+        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
+      }
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_gallery_media').insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_gallery_media').upsert(toUpdate);
+    }
+  }
+
   void _save() async {
     if (!_formKey.currentState!.validate()) {
       _snack('⚠️ Veuillez remplir les champs obligatoires (avec *)', AppColors.warning);
@@ -738,50 +919,49 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
 
     setState(() => _isBusy = true);
     try {
-      final mappedCities = _cities.map((c) {
-        final pop = c['population']?.toString().trim() ?? '';
-        return City.fromJson({'id': c['id']?.toString().isNotEmpty == true ? c['id'] : null, 'province_id': _provinceId, 'name': c['name'] ?? '', 'population': pop.isNotEmpty ? pop : null, 'is_capital': c['is_capital'] ?? false, 'mayor': c['mayor'], 'mayor_photo_url': c['mayor_photo_url'], 'media': c['media'] ?? []});
-      }).toList();
+      // 1. Préparer les données de la province principale
+      final provinceData = {
+        'name': _nameCtrl.text.trim(),
+        'code': _codeCtrl.text.trim(),
+        'capital': _capitalCtrl.text.trim(),
+        'region': _region,
+        'area': int.tryParse(_areaCtrl.text.trim()),
+        'population': int.tryParse(_populationCtrl.text.trim()),
+        'description': _descriptionCtrl.text.trim().isEmpty ? null : _descriptionCtrl.text.trim(),
+        'history': _historyCtrl.text.trim().isEmpty ? null : _historyCtrl.text.trim(),
+        'climate': _climateCtrl.text.trim().isEmpty ? null : _climateCtrl.text.trim(),
+        'infrastructure': _infrastructureCtrl.text.trim().isEmpty ? null : _infrastructureCtrl.text.trim(),
+        'education': _educationCtrl.text.trim().isEmpty ? null : _educationCtrl.text.trim(),
+        'cover_image_url': _coverImageUrl,
+        'coat_of_arms_url': _coatOfArmsUrl,
+        'map_url': _mapUrl,
+        'website': _websiteCtrl.text.trim().isEmpty ? null : _websiteCtrl.text.trim(),
+        'governor': _governorCtrl.text.trim().isEmpty ? null : _governorCtrl.text.trim(),
+        'governor_photo_url': _governorPhotoUrl,
+        'vice_governor': _viceGovernorCtrl.text.trim().isEmpty ? null : _viceGovernorCtrl.text.trim(),
+        'vice_governor_photo_url': _viceGovernorPhotoUrl,
+        'languages': _languagesCtrl.text.trim().isEmpty ? null : _languagesCtrl.text.trim(),
+        'resources': _resourcesCtrl.text.trim().isEmpty ? null : _resourcesCtrl.text.trim(),
+        'territories_count': int.tryParse(_territoriesCountCtrl.text.trim()),
+      };
 
-      final mappedEconomy = _economicSectors.map((e) => ProvinceEconomicResource.fromJson({'id': e['id']?.toString().isNotEmpty == true ? e['id'] : null, 'province_id': _provinceId, 'name': e['name'] ?? '', 'description': e['description'], 'media': e['media'] ?? []})).toList();
-      final mappedTourism = _tourismSites.map((t) => ProvinceTourism.fromJson({'id': t['id']?.toString().isNotEmpty == true ? t['id'] : null, 'province_id': _provinceId, 'name': t['name'] ?? '', 'type': t['type'] ?? '', 'description': t['description'], 'media': t['media'] ?? []})).toList();
-      
-      final mappedAdmin = _administrativeDivisions.map((a) {
-        final pop = a['population']?.toString().trim() ?? '';
-        final area = a['area']?.toString().trim() ?? '';
-        return ProvinceAdministrativeDivision.fromJson({'id': a['id']?.toString().isNotEmpty == true ? a['id'] : null, 'province_id': _provinceId, 'type': a['type'] ?? 'Territoire', 'name': a['name'] ?? '', 'capital': a['capital'], 'population': pop.isNotEmpty ? int.tryParse(pop) : null, 'area': area.isNotEmpty ? num.tryParse(area) : null, 'administrator': a['administrator'], 'media': a['media'] ?? []});
-      }).toList();
+      String savedProvinceId;
 
-      final mappedEmergency = _emergencyContacts.map((e) => ProvinceEmergencyContact.fromJson({'id': e['id']?.toString().isNotEmpty == true ? e['id'] : null, 'province_id': _provinceId, 'service': e['service'], 'phone': e['phone']})).toList();
+      // 2. Sauvegarder la province principale
+      if (_provinceId == null) {
+        // INSERT
+        final res = await SupabaseConfig.client.from('provinces').insert(provinceData).select();
+        savedProvinceId = (res as List).first['id'];
+      } else {
+        // UPDATE
+        await SupabaseConfig.client.from('provinces').update(provinceData).eq('id', _provinceId);
+        savedProvinceId = _provinceId!;
+      }
 
-      final province = Province(
-        id: _provinceId ?? '', name: _nameCtrl.text.trim(), code: _codeCtrl.text.trim(), capital: _capitalCtrl.text.trim(), region: _region,
-        area: int.tryParse(_areaCtrl.text.trim()), population: int.tryParse(_populationCtrl.text.trim()),
-        description: _descriptionCtrl.text.trim().isEmpty ? null : _descriptionCtrl.text.trim(),
-        history: _historyCtrl.text.trim().isEmpty ? null : _historyCtrl.text.trim(),
-        climate: _climateCtrl.text.trim().isEmpty ? null : _climateCtrl.text.trim(),
-        infrastructure: _infrastructureCtrl.text.trim().isEmpty ? null : _infrastructureCtrl.text.trim(),
-        education: _educationCtrl.text.trim().isEmpty ? null : _educationCtrl.text.trim(),
-        coverImageUrl: _coverImageUrl, coatOfArmsUrl: _coatOfArmsUrl, mapUrl: _mapUrl,
-        website: _websiteCtrl.text.trim().isEmpty ? null : _websiteCtrl.text.trim(),
-        governor: _governorCtrl.text.trim().isEmpty ? null : _governorCtrl.text.trim(),
-        governorPhotoUrl: _governorPhotoUrl,
-        viceGovernor: _viceGovernorCtrl.text.trim().isEmpty ? null : _viceGovernorCtrl.text.trim(),
-        viceGovernorPhotoUrl: _viceGovernorPhotoUrl,
-        ministers: _ministers.where((m) => (m['name'] ?? '').trim().isNotEmpty).toList(),
-        cities: mappedCities, economicResources: mappedEconomy, tourismSites: mappedTourism,
-        emergencyContacts: mappedEmergency, administrativeDivisions: mappedAdmin,
-        achievements: _achievements.where((a) => (a['title'] ?? '').trim().isNotEmpty).toList(),
-        tribes: _tribes.where((t) => (t['name'] ?? '').trim().isNotEmpty).toList(),
-        galleryMedia: _galleryMedia,
-        languages: _languagesCtrl.text.trim().isEmpty ? null : _languagesCtrl.text.trim(),
-        resources: _resourcesCtrl.text.trim().isEmpty ? null : _resourcesCtrl.text.trim(),
-        territoriesCount: int.tryParse(_territoriesCountCtrl.text.trim()),
-      );
+      // 3. Sauvegarder toutes les relations séparément
+      await _saveRelations(savedProvinceId);
 
-      final service = ref.read(provincesServiceProvider);
-      await service.saveProvinceWithRelations(province);
-
+      // 4. Rafraîchir les providers
       ref.invalidate(provincesProvider);
       ref.invalidate(adminProvincesProvider);
       if (_provinceId != null) ref.invalidate(provinceWithAllRelationsProvider(_provinceId!));
