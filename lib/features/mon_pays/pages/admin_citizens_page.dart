@@ -5,21 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/app_colors.dart';
-
-// Note: Remplace cet import par ton vrai provider de citoyens quand il sera créé
-// import '../providers/citizens_provider.dart';
+import '../providers/citizens_provider.dart'; // ✅ Décommenté et corrigé
 
 class AdminCitizensPage extends ConsumerWidget {
   const AdminCitizensPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Remplace 'citizensProvider' par ton vrai provider
-    // final citizensAsync = ref.watch(citizensProvider);
+    final citizensAsync = ref.watch(citizensProvider); // ✅ Utilise le vrai provider
     
-    // Pour l'instant, on utilise une liste vide pour que le build passe
-    final citizens = <Map<String, dynamic>>[]; 
-
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
       appBar: AppBar(
@@ -34,18 +28,32 @@ class AdminCitizensPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add_rounded),
-            onPressed: () {
-              // context.push('/mon-pays/citizens/form');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Formulaire citoyen à implémenter')),
-              );
-            },
+            onPressed: () => context.push('/mon-pays/citizens/form'),
             tooltip: 'Ajouter un citoyen',
           ),
         ],
       ),
-      body: citizens.isEmpty
-          ? const Center(
+      body: citizensAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.danger, size: 48),
+              const SizedBox(height: 16),
+              Text('Erreur: $e', style: const TextStyle(color: AppColors.danger)),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => ref.invalidate(citizensProvider),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Réessayer'),
+              ),
+            ],
+          ),
+        ),
+        data: (citizens) {
+          if (citizens.isEmpty) {
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -62,38 +70,39 @@ class AdminCitizensPage extends ConsumerWidget {
                   ),
                 ],
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: citizens.length,
-              itemBuilder: (context, index) {
-                final c = citizens[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    leading: CircleAvatar(
-                      backgroundColor: AppColors.gold.withOpacity(0.1),
-                      child: Text(
-                        (c['full_name'] ?? 'C').substring(0, 1).toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.gold, fontSize: 16),
-                      ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: citizens.length,
+            itemBuilder: (context, index) {
+              final c = citizens[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(16),
+                  leading: CircleAvatar(
+                    backgroundColor: AppColors.gold.withOpacity(0.1),
+                    child: Text(
+                      (c.fullName ?? 'C').substring(0, 1).toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.gold, fontSize: 16),
                     ),
-                    title: Text(c['full_name'] ?? 'Nom inconnu', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(c['domain'] ?? 'Domaine non spécifié', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-                    onTap: () {
-                      // context.push('/mon-pays/citizens/form', extra: c);
-                    },
                   ),
-                );
-              },
-            ),
+                  title: Text(c.fullName ?? 'Nom inconnu', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(c.domain ?? 'Domaine non spécifié', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                  onTap: () => context.push('/mon-pays/citizens/form', extra: c),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
