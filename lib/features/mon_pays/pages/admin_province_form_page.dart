@@ -1,8 +1,8 @@
 // lib/features/mon_pays/pages/admin_province_form_page.dart
 //
 // AdminProvinceFormPage — Production Enterprise (Admin_thix)
-// Gestion complète des provinces avec relations imbriquées et uploads Supabase
-// Optimisé : Séparation Insert/Update pour éviter les conflits de clés
+// Version Autonome : Pas de dépendance aux modèles enfants manquants
+// Gestion robuste des IDs et Null Safety corrigée
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,11 +15,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/app_colors.dart';
 import '../../../supabase/supabase_config.dart';
 import '../models/province.dart';
-import '../models/city.dart';
-import '../models/province_economic.dart';
-import '../models/province_tourism.dart';
-import '../models/province_emergency.dart';
-import '../models/province_administrative.dart';
 import '../providers/provinces_provider.dart';
 
 class AdminProvinceFormPage extends ConsumerStatefulWidget {
@@ -57,14 +52,14 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   String _region = 'Centre';
   static const List<String> _regions = ['Centre', 'Est', 'Ouest', 'Nord', 'Sud'];
 
-  // ─ Images ──
+  // ── Images ──
   String? _coverImageUrl;
   String? _coatOfArmsUrl;
   String? _mapUrl;
   String? _governorPhotoUrl;
   String? _viceGovernorPhotoUrl;
 
-  // ── Relations imbriquées (Stockage local temporaire) ──
+  // ── Relations imbriquées (Stockage local temporaire en Map) ──
   List<Map<String, dynamic>> _ministers = [];
   List<Map<String, dynamic>> _cities = [];
   List<Map<String, dynamic>> _economicSectors = [];
@@ -162,10 +157,10 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
     _governorPhotoUrl = p.governorPhotoUrl;
     _viceGovernorPhotoUrl = p.viceGovernorPhotoUrl;
 
-    // Mapping des listes avec gestion sécurisée des IDs
+    // Mapping sécurisé sans modèles externes
     _ministers = p.ministers.map<Map<String, dynamic>>((m) => <String, dynamic>{
       '_key': _newKey(), 
-      'id': m['id'], // Garder l'ID si existant
+      'id': m['id'], 
       'name': m['name'] ?? '', 
       'role': m['role'] ?? '', 
       'photo_url': m['photoUrl'] ?? m['photo_url'] ?? '',
@@ -312,7 +307,7 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
       if (mounted) _snack('✅ Médias ajoutés', AppColors.success);
     } catch (e) {
       setState(() => _isBusy = false);
-      if (mounted) _snack('❌ Upload : $e', AppColors.danger);
+      if (mounted) _snack(' Upload : $e', AppColors.danger);
     }
   }
 
@@ -780,10 +775,10 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SAUVEGARDE SÉPARÉE (INSERT vs UPDATE)
+  // SAUVEGARDE SÉPARÉE (INSERT vs UPDATE) - CORRIGÉE
   // ═══════════════════════════════════════════════════════════════
   
-  // Helper pour séparer les nouveaux éléments (sans ID) des existants (avec ID)
+  // Helper pour préparer les données et gérer les IDs
   Map<String, dynamic> _prepareDataForSave(Map<String, dynamic> item, String provinceId) {
     final data = Map<String, dynamic>.from(item)..remove('_key');
     data['province_id'] = provinceId;
@@ -796,13 +791,15 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
   }
 
   Future<void> _saveRelations(String savedProvinceId) async {
-    // 1. VILLES
-    if (_cities.isNotEmpty) {
+    // Fonction utilitaire interne pour éviter la répétition
+    Future<void> _saveTable(String tableName, List<Map<String, dynamic>> items) async {
+      if (items.isEmpty) return;
+      
       final toInsert = <Map<String, dynamic>>[];
       final toUpdate = <Map<String, dynamic>>[];
       
-      for (var c in _cities) {
-        final data = _prepareDataForSave(c, savedProvinceId);
+      for (var item in items) {
+        final data = _prepareDataForSave(item, savedProvinceId);
         if (data.containsKey('id')) {
           toUpdate.add(data);
         } else {
@@ -810,105 +807,20 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
         }
       }
       
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('cities').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('cities').upsert(toUpdate);
+      if (toInsert.isNotEmpty) await SupabaseConfig.client.from(tableName).insert(toInsert);
+      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from(tableName).upsert(toUpdate);
     }
 
-    // 2. ÉCONOMIE
-    if (_economicSectors.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var e in _economicSectors) {
-        final data = _prepareDataForSave(e, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_economic_resources').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_economic_resources').upsert(toUpdate);
-    }
-
-    // 3. TOURISME
-    if (_tourismSites.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var t in _tourismSites) {
-        final data = _prepareDataForSave(t, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_tourism_sites').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_tourism_sites').upsert(toUpdate);
-    }
-
-    // 4. URGENCES
-    if (_emergencyContacts.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var e in _emergencyContacts) {
-        final data = _prepareDataForSave(e, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_emergency_contacts').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_emergency_contacts').upsert(toUpdate);
-    }
-
-    // 5. DIVISIONS ADMINISTRATIVES
-    if (_administrativeDivisions.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var a in _administrativeDivisions) {
-        final data = _prepareDataForSave(a, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_administrative_divisions').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_administrative_divisions').upsert(toUpdate);
-    }
-
-    // 6. RÉALISATIONS
-    if (_achievements.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var a in _achievements.where((a) => (a['title'] ?? '').trim().isNotEmpty)) {
-        final data = _prepareDataForSave(a, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_achievements').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_achievements').upsert(toUpdate);
-    }
-
-    // 7. TRIBUS
-    if (_tribes.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var t in _tribes.where((t) => (t['name'] ?? '').trim().isNotEmpty)) {
-        final data = _prepareDataForSave(t, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_tribes').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_tribes').upsert(toUpdate);
-    }
-
-    // 8. MINISTRES
-    if (_ministers.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var m in _ministers.where((m) => (m['name'] ?? '').trim().isNotEmpty)) {
-        final data = _prepareDataForSave(m, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_ministers').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_ministers').upsert(toUpdate);
-    }
-
-    // 9. GALERIE MÉDIA
-    if (_galleryMedia.isNotEmpty) {
-      final toInsert = <Map<String, dynamic>>[];
-      final toUpdate = <Map<String, dynamic>>[];
-      for (var g in _galleryMedia) {
-        final data = _prepareDataForSave(g, savedProvinceId);
-        if (data.containsKey('id')) toUpdate.add(data); else toInsert.add(data);
-      }
-      if (toInsert.isNotEmpty) await SupabaseConfig.client.from('province_gallery_media').insert(toInsert);
-      if (toUpdate.isNotEmpty) await SupabaseConfig.client.from('province_gallery_media').upsert(toUpdate);
-    }
+    // Sauvegarde de toutes les tables
+    await _saveTable('cities', _cities);
+    await _saveTable('province_economic_resources', _economicSectors);
+    await _saveTable('province_tourism_sites', _tourismSites);
+    await _saveTable('province_emergency_contacts', _emergencyContacts);
+    await _saveTable('province_administrative_divisions', _administrativeDivisions);
+    await _saveTable('province_achievements', _achievements.where((a) => (a['title'] ?? '').trim().isNotEmpty).toList());
+    await _saveTable('province_tribes', _tribes.where((t) => (t['name'] ?? '').trim().isNotEmpty).toList());
+    await _saveTable('province_ministers', _ministers.where((m) => (m['name'] ?? '').trim().isNotEmpty).toList());
+    await _saveTable('province_gallery_media', _galleryMedia);
   }
 
   void _save() async {
@@ -947,14 +859,14 @@ class _AdminProvinceFormPageState extends ConsumerState<AdminProvinceFormPage>
 
       String savedProvinceId;
 
-      // 2. Sauvegarder la province principale
+      // 2. Sauvegarder la province principale (Correction Null Safety ici)
       if (_provinceId == null) {
         // INSERT
         final res = await SupabaseConfig.client.from('provinces').insert(provinceData).select();
         savedProvinceId = (res as List).first['id'];
       } else {
-        // UPDATE
-        await SupabaseConfig.client.from('provinces').update(provinceData).eq('id', _provinceId);
+        // UPDATE : Utilisation de '!' car on sait que _provinceId n'est pas null dans ce bloc
+        await SupabaseConfig.client.from('provinces').update(provinceData).eq('id', _provinceId!);
         savedProvinceId = _provinceId!;
       }
 
