@@ -15,6 +15,8 @@ import '../features/certifications/models/admin_certification.dart';
 import 'package:thix_admin/features/moderation/pages/admin_moderation_page.dart';
 import '../features/opportunities/pages/admin_opportunities_page.dart';
 import '../features/opportunities/providers/opportunities_provider.dart';
+import '../features/citizens/pages/admin_citizens_page.dart';
+
 /// 🧩 Définition d'un module du shell
 class AdminModule {
   final String title;
@@ -66,6 +68,11 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
       icon: Icons.article_rounded,
       builder: (_) => AdminArticlesPage(),
     ),
+    AdminModule(
+    title: 'Fierté de la Nation',  // ✅ NOUVEAU MODULE
+    icon: Icons.emoji_events_rounded,
+    builder: (_) => const AdminCitizensPage(),
+  ),
     AdminModule(
       title: 'Journal d\'audit',
       icon: Icons.receipt_long_rounded,
