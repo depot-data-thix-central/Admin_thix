@@ -15,10 +15,12 @@ import '../features/certifications/models/admin_certification.dart';
 import 'package:thix_admin/features/moderation/pages/admin_moderation_page.dart';
 import '../features/opportunities/pages/admin_opportunities_page.dart';
 import '../features/opportunities/providers/opportunities_provider.dart';
-import '../features/mon_pays/pages/admin_banners_page.dart';
+
 // ═══ MODULE MON PAYS ═══
-import '../features/citizens/pages/admin_citizens_page.dart';
+import '../features/mon_pays/pages/admin_provinces_page.dart';       // ✅ AJOUTÉ
+import '../features/mon_pays/pages/admin_citizens_page.dart';
 import '../features/mon_pays/pages/admin_historical_figures_page.dart';
+import '../features/mon_pays/pages/admin_banners_page.dart';
 
 /// 🧩 Définition d'un module du shell
 class AdminModule {
@@ -85,6 +87,11 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
     // ── SECTION : MON PAYS 🇨🇩 ──
     const AdminModule.header('── MON PAYS ──'),
     AdminModule(
+      title: 'Provinces',                                      // ✅ AJOUTÉ
+      icon: Icons.map_rounded,                                 // ✅ AJOUTÉ
+      builder: (_) => const AdminProvincesPage(),              // ✅ AJOUTÉ
+    ),
+    AdminModule(
       title: 'Fierté de la Nation',
       icon: Icons.emoji_events_rounded,
       builder: (_) => const AdminCitizensPage(),
@@ -95,10 +102,10 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
       builder: (_) => const AdminHistoricalFiguresPage(),
     ),
     AdminModule(
-  title: 'Mon Pays — Bannières',
-  icon: Icons.panorama_rounded,
-  builder: (_) => const AdminBannersPage(),
-),
+      title: 'Mon Pays — Bannières',
+      icon: Icons.panorama_rounded,
+      builder: (_) => const AdminBannersPage(),
+    ),
 
     // ── SYSTÈME ──
     AdminModule(
@@ -168,8 +175,7 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
 
     // Liste filtrée pour l'IndexedStack (sans les headers)
-    final contentModules =
-        _modules.where((m) => !m.isHeader).toList();
+    final contentModules = _modules.where((m) => !m.isHeader).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
