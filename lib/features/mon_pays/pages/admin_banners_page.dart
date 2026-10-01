@@ -178,12 +178,12 @@ class _AdminBannersPageState extends ConsumerState<AdminBannersPage> {
                   child: Column(
                     children: [
                       if (imgUrl != null)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(imgUrl, height: 110, width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40)),
-                        ),
+  ClipRRect(
+    borderRadius: BorderRadius.circular(8),
+    child: Image.network(imgUrl!, height: 110, width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40)),
+  ),
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
