@@ -15,7 +15,7 @@ import '../features/certifications/models/admin_certification.dart';
 import 'package:thix_admin/features/moderation/pages/admin_moderation_page.dart';
 import '../features/opportunities/pages/admin_opportunities_page.dart';
 import '../features/opportunities/providers/opportunities_provider.dart';
-
+import '../features/mon_pays/pages/admin_banners_page.dart';
 // ═══ MODULE MON PAYS ═══
 import '../features/citizens/pages/admin_citizens_page.dart';
 import '../features/mon_pays/pages/admin_historical_figures_page.dart';
@@ -94,6 +94,11 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
       icon: Icons.history_edu_rounded,
       builder: (_) => const AdminHistoricalFiguresPage(),
     ),
+    AdminModule(
+  title: 'Mon Pays — Bannières',
+  icon: Icons.panorama_rounded,
+  builder: (_) => const AdminBannersPage(),
+),
 
     // ── SYSTÈME ──
     AdminModule(
