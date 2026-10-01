@@ -11,23 +11,35 @@ import '../features/audit/pages/admin_audit_page.dart';
 import '../features/security/pages/admin_security_page.dart';
 import '../features/certifications/providers/certifications_provider.dart';
 import '../features/security/providers/security_provider.dart';
-import '../features/certifications/models/admin_certification.dart'; 
+import '../features/certifications/models/admin_certification.dart';
 import 'package:thix_admin/features/moderation/pages/admin_moderation_page.dart';
 import '../features/opportunities/pages/admin_opportunities_page.dart';
 import '../features/opportunities/providers/opportunities_provider.dart';
+
+// ═══ MODULE MON PAYS ═══
 import '../features/citizens/pages/admin_citizens_page.dart';
+import '../features/mon_pays/pages/admin_historical_figures_page.dart';
 
 /// 🧩 Définition d'un module du shell
 class AdminModule {
   final String title;
   final IconData icon;
   final WidgetBuilder builder;
+  final bool isHeader; // pour les titres de section
 
   const AdminModule({
     required this.title,
     required this.icon,
     required this.builder,
+    this.isHeader = false,
   });
+
+  const AdminModule.header(this.title)
+      : icon = Icons.circle,
+        builder = _emptyBuilder,
+        isHeader = true;
+
+  static Widget _emptyBuilder(BuildContext _) => const SizedBox.shrink();
 }
 
 /// 🏠 Shell principal de l'admin (sidebar + contenu)
@@ -41,12 +53,13 @@ class AdminShellPage extends ConsumerStatefulWidget {
 class _AdminShellPageState extends ConsumerState<AdminShellPage> {
   int _index = 0;
 
-  /// 📚 Les 6 modules de l'admin
+  /// 📚 Modules de l'admin (avec section "Mon Pays")
   static final List<AdminModule> _modules = [
+    // ── GÉNÉRAL ──
     AdminModule(
       title: 'Dashboard',
       icon: Icons.dashboard_rounded,
-      builder: (_) => AdminDashboardPage(),
+      builder: (_) => const AdminDashboardPage(),
     ),
     AdminModule(
       title: 'Utilisateurs',
@@ -68,11 +81,21 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
       icon: Icons.article_rounded,
       builder: (_) => AdminArticlesPage(),
     ),
+
+    // ── SECTION : MON PAYS 🇨🇩 ──
+    const AdminModule.header('── MON PAYS ──'),
     AdminModule(
-    title: 'Fierté de la Nation',  // ✅ NOUVEAU MODULE
-    icon: Icons.emoji_events_rounded,
-    builder: (_) => const AdminCitizensPage(),
-  ),
+      title: 'Fierté de la Nation',
+      icon: Icons.emoji_events_rounded,
+      builder: (_) => const AdminCitizensPage(),
+    ),
+    AdminModule(
+      title: 'Figures Historiques',
+      icon: Icons.history_edu_rounded,
+      builder: (_) => const AdminHistoricalFiguresPage(),
+    ),
+
+    // ── SYSTÈME ──
     AdminModule(
       title: 'Journal d\'audit',
       icon: Icons.receipt_long_rounded,
@@ -94,7 +117,9 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
   int _badgeFor(int index) {
     switch (index) {
       case 2: // Certifications : demandes en attente
-        return ref.watch(certificationsProvider).items
+        return ref
+            .watch(certificationsProvider)
+            .items
             .where((c) => c.state == CertState.pending)
             .length;
       case 5: // Sécurité : menaces actives
@@ -110,12 +135,14 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
       builder: (ctx) => AlertDialog(
         title: const Text('Se déconnecter ?'),
         content: const Text(
-            'Vous serez déconnecté du panneau d\'administration.',
-            style: TextStyle(fontSize: 13.5)),
+          'Vous serez déconnecté du panneau d\'administration.',
+          style: TextStyle(fontSize: 13.5),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.danger,
@@ -129,35 +156,37 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
     );
     if (ok != true || !mounted) return;
     await SupabaseConfig.client.auth.signOut();
-    // L'AdminAuthGate redirige automatiquement vers le login
   }
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
 
+    // Liste filtrée pour l'IndexedStack (sans les headers)
+    final contentModules =
+        _modules.where((m) => !m.isHeader).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
-      // ── Drawer pour mobile ──
       drawer: isDesktop ? null : Drawer(backgroundColor: AppColors.primary, child: _sidebar()),
       appBar: isDesktop
           ? null
           : AppBar(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              title: const Text('THIX ADMIN',
-                  style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
+              title: const Text(
+                'THIX ADMIN',
+                style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
+              ),
             ),
       body: Row(
         children: [
-          // ── Sidebar fixe desktop ──
           if (isDesktop) _sidebar(),
-          // ── Contenu (IndexedStack = état conservé) ──
           Expanded(
             child: IndexedStack(
               index: _index,
               children: [
-                for (final m in _modules) Builder(builder: m.builder),
+                for (final m in contentModules) Builder(builder: m.builder),
               ],
             ),
           ),
@@ -168,12 +197,21 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
 
   /// 🧭 Sidebar commune (desktop + drawer)
   Widget _sidebar() {
+    // Mapping : index dans _modules → index dans contentModules (pour _index)
+    int contentIndex = 0;
+    final indexMap = <int, int>{};
+    for (int i = 0; i < _modules.length; i++) {
+      if (!_modules[i].isHeader) {
+        indexMap[i] = contentIndex++;
+      }
+    }
+
     return Container(
       width: 240,
       color: AppColors.primary,
       child: Column(
         children: [
-          // ── Logo ─
+          // ── Logo ──
           Container(
             height: 72,
             alignment: Alignment.centerLeft,
@@ -203,27 +241,45 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
               itemCount: _modules.length,
               itemBuilder: (_, i) {
                 final m = _modules[i];
-                final selected = i == _index;
-                final badge = _badgeFor(i);
+
+                // ── En-tête de section ──
+                if (m.isHeader) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+                    child: Text(
+                      m.title,
+                      style: const TextStyle(
+                        color: AppColors.secondary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  );
+                }
+
+                final contentIdx = indexMap[i]!;
+                final selected = contentIdx == _index;
+                final badge = _badgeFor(contentIdx);
+
                 return InkWell(
                   onTap: () {
-                    setState(() => _index = i);
+                    setState(() => _index = contentIdx);
                     if (!MediaQuery.of(context).size.width.isFinite ||
                         MediaQuery.of(context).size.width < 900) {
-                      Navigator.pop(context); // ferme le drawer
+                      Navigator.pop(context);
                     }
                   },
                   child: Container(
                     color: selected ? Colors.white10 : Colors.transparent,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     child: Row(
                       children: [
-                        Icon(m.icon,
-                            size: 18,
-                            color: selected
-                                ? AppColors.secondary
-                                : Colors.white70),
+                        Icon(
+                          m.icon,
+                          size: 18,
+                          color: selected ? AppColors.secondary : Colors.white70,
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
@@ -231,24 +287,25 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
                             style: TextStyle(
                               color: selected ? Colors.white : Colors.white70,
                               fontSize: 13,
-                              fontWeight:
-                                  selected ? FontWeight.w800 : FontWeight.w500,
+                              fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                             ),
                           ),
                         ),
                         if (badge > 0)
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
                               color: AppColors.danger,
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Text('$badge',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800)),
+                            child: Text(
+                              '$badge',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -269,11 +326,14 @@ class _AdminShellPageState extends ConsumerState<AdminShellPage> {
                 children: [
                   Icon(Icons.logout_rounded, size: 18, color: Colors.white70),
                   SizedBox(width: 12),
-                  Text('Déconnexion',
-                      style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    'Déconnexion',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
