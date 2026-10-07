@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <base href="/Admin_thix/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="THIX Admin - Panneau d'administration et de monitoring THIX ID">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       🔒 CSP CORRIGÉE : les domaines de polices sont autorisés
+       dans connect-src, style-src ET font-src (indispensable
+       pour que CanvasKit puisse télécharger Roboto)
+       ═══════════════════════════════════════════════════════════ -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://www.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com; media-src 'self' blob: https://*.supabase.co; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
+  <!-- ═══ PWA / Mobile ═══ -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="THIX Admin">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- ═══ Favicon ═══ -->
+  <link rel="icon" type="image/png" href="favicon.png">
+
+  <!-- ═══ POLICE ROBOTO (Google Fonts — désormais autorisée par la CSP) ═══ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <title>THIX Admin</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#101840">
+
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #F7F8FB; }
+    #splash {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+      background: #101840;
+      font-family: 'Roboto', sans-serif;
+    }
+    #splash .logo { color: #FFB800; font-size: 26px; font-weight: 900; letter-spacing: 2px; }
+    #splash .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,.15);
+      border-top-color: #FFB800;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    #splash .hint { color: rgba(255,255,255,.5); font-size: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="splash">
+    <div class="logo">THIX ADMIN</div>
+    <div class="spinner"></div>
+    <div class="hint">Chargement du panneau d'administration…</div>
+  </div>
+
+  <script src="splash_remover.js" defer></script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
